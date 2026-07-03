@@ -14,8 +14,9 @@ app.use(cookieParser());
 app.use(morgan("dev"));
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://perplexity-59tg.onrender.com"],
+    origin: ["http://localhost:5173", "https://perplexity-1-5gaq.onrender.com"],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   }),
 );
 
