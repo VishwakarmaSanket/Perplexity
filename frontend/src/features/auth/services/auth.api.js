@@ -1,12 +1,7 @@
-import axios from "axios";
-
-const api = axios.create({
-  baseURL: "",
-  withCredentials: true,
-});
+import api from "../../../api";
 
 export async function register({ username, email, password }) {
-  const response = await api.post("/api/auth/register", {
+  const response = await api.post("/auth/register", {
     username,
     email,
     password,
@@ -15,7 +10,7 @@ export async function register({ username, email, password }) {
 }
 
 export async function login({ email, password }) {
-  const response = await api.post("/api/auth/login", {
+  const response = await api.post("/auth/login", {
     email,
     password,
   });
@@ -23,11 +18,11 @@ export async function login({ email, password }) {
 }
 
 export async function getMe() {
-  const response = await api.get("/api/auth/get-me");
+  const response = await api.get("/auth/get-me");
   return response.data;
 }
 
 export async function logout() {
-  const response = await api.post("/api/auth/logout");
+  const response = await api.post("/auth/logout");
   return response.data;
 }

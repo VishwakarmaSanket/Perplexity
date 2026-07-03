@@ -1,8 +1,7 @@
 import { io } from "socket.io-client";
 
 export async function initializeSocketConnection() {
-  // Empty string = same origin → goes through Vite proxy (/socket.io)
-  const socket = io("/", {
+  const socket = io(import.meta.env.VITE_API_URL, {
     withCredentials: true,
   });
   socket.on("connect", () => {
