@@ -1,0 +1,351 @@
+// Premium Dark Theme Palette (aligned with Dashboard emerald theme)
+$color-bg-dark: #0a0d10;
+$color-bg-secondary: #12171d;
+$color-bg-tertiary: #1c232d;
+$color-text-primary: #f3f4f6;
+$color-text-secondary: #9ca3af;
+$color-primary: #21b57a;
+$color-primary-light: #2ecc71;
+$color-accent: #059669;
+$color-border: rgba(33, 181, 122, 0.12);
+$color-focus-ring: rgba(33, 181, 122, 0.35);
+
+$font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+// Keyframe Animations
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes driftGlow1 {
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.25;
+  }
+
+  50% {
+    transform: translate(30px, -20px) scale(1.15);
+    opacity: 0.35;
+  }
+}
+
+@keyframes driftGlow2 {
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.15;
+  }
+
+  50% {
+    transform: translate(-40px, 30px) scale(1.2);
+    opacity: 0.25;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Section Container
+.login-section {
+  position: relative;
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 50%, #dadada 0%, $color-bg-dark 100%);
+  padding: 2.5rem 1rem;
+  color: $color-text-primary;
+  font-family: $font-family;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  // Background Glows
+  .glow-container {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 1;
+
+    .glow-top-left {
+      position: absolute;
+      top: -120px;
+      left: -120px;
+      width: 440px;
+      height: 440px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(33, 181, 122, 0.3) 0%, rgba(255, 255, 255, 0) 70%);
+      filter: blur(80px);
+      animation: driftGlow1 8s infinite alternate ease-in-out;
+    }
+
+    .glow-bottom-right {
+      position: absolute;
+      bottom: -100px;
+      right: -100px;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(5, 150, 105, 0.2) 0%, rgba(5, 150, 105, 0) 70%);
+      filter: blur(80px);
+      animation: driftGlow2 10s infinite alternate ease-in-out;
+    }
+  }
+
+  // Center Content
+  .login-center {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 28rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    // Glowing Aura Behind Card
+    .card-glow {
+      position: absolute;
+      z-index: -1;
+      width: 100%;
+      height: 100%;
+      filter: blur(100px);
+      opacity: 0.15;
+      background: radial-gradient(circle, $color-primary 0%, transparent 80%);
+    }
+
+    // Main Auth Card
+    .login-card {
+      width: 100%;
+      border-radius: 1.25rem;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(18, 23, 29, 0.65);
+      padding: 2.75rem 2.25rem;
+      box-shadow:
+        0 4px 30px rgba(0, 0, 0, 0.4),
+        inset 0 1px 1px rgba(255, 255, 255, 0.03),
+        0 1px 2px rgba(33, 181, 122, 0.1);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+      animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+
+      &:hover {
+        border-color: rgba(33, 181, 122, 0.25);
+        box-shadow:
+          0 10px 40px rgba(0, 0, 0, 0.5),
+          inset 0 1px 1px rgba(255, 255, 255, 0.05),
+          0 0 20px rgba(33, 181, 122, 0.15);
+        transform: translateY(-2px);
+      }
+
+      // Card Header
+      .login-heading {
+        h1 {
+          font-family: "Outfit", sans-serif;
+          font-size: 1.8rem;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          background: linear-gradient(135deg, #ffffff 30%, #a7f3d0 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          margin-bottom: 0.35rem;
+        }
+      }
+
+      .login-subtitle {
+        font-size: 0.875rem;
+        color: $color-text-secondary;
+        line-height: 1.4;
+      }
+
+      // Floating Alert Banners
+      .auth-alert {
+        margin-top: 1.25rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: 1px solid transparent;
+
+        &--error {
+          background: rgba(239, 68, 68, 0.08);
+          border-color: rgba(239, 68, 68, 0.2);
+          color: #fca5a5;
+        }
+
+        &--success {
+          background: rgba(16, 185, 129, 0.08);
+          border-color: rgba(16, 185, 129, 0.2);
+          color: #a7f3d0;
+        }
+      }
+
+      // Form Styles
+      .login-form {
+        margin-top: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+
+          label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: $color-text-secondary;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: color 0.2s ease;
+          }
+
+          &:focus-within label {
+            color: $color-primary;
+          }
+
+          // Icon-wrapper input design
+          .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+
+            .input-icon {
+              position: absolute;
+              left: 1rem;
+              color: #4b5563;
+              transition: color 0.2s ease, transform 0.2s ease;
+              pointer-events: none;
+            }
+
+            input {
+              width: 100%;
+              background: rgba(10, 13, 16, 0.6);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 0.625rem;
+              padding: 0.75rem 1rem 0.75rem 2.75rem;
+              font-size: 0.9rem;
+              color: $color-text-primary;
+              outline: none;
+              transition: all 0.25s ease;
+
+              &::placeholder {
+                color: #4b5563;
+              }
+
+              &:focus {
+                border-color: $color-primary;
+                background: rgba(10, 13, 16, 0.9);
+                box-shadow: 0 0 10px rgba(33, 181, 122, 0.15), 0 0 0 2px $color-focus-ring;
+              }
+
+              &:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+              }
+            }
+
+            &:focus-within {
+              .input-icon {
+                color: $color-primary;
+                transform: scale(1.05);
+              }
+            }
+          }
+        }
+
+        // Action Button
+        .submit-btn {
+          width: 100%;
+          border-radius: 0.625rem;
+          background: linear-gradient(135deg, $color-primary 0%, $color-accent 100%);
+          padding: 0.75rem 1.2rem;
+          font-weight: 600;
+          color: #ffffff;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 4px 15px rgba(33, 181, 122, 0.2);
+          transition: all 0.25s ease;
+          font-size: 0.95rem;
+          margin-top: 0.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+
+          &:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(33, 181, 122, 0.35);
+            background: linear-gradient(135deg, $color-primary-light 0%, $color-primary 100%);
+          }
+
+          &:active:not(:disabled) {
+            transform: translateY(0);
+          }
+
+          &:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+          }
+
+          // Spinner style
+          .btn-spinner-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+
+            .btn-spinner {
+              width: 1rem;
+              height: 1rem;
+              border: 2px solid rgba(255, 255, 255, 0.3);
+              border-top-color: white;
+              border-radius: 50%;
+              animation: spin 0.6s linear infinite;
+            }
+          }
+        }
+      }
+
+      // Card Footer
+      .login-footer {
+        margin-top: 2rem;
+        text-align: center;
+        font-size: 0.85rem;
+        color: $color-text-secondary;
+
+        a {
+          font-weight: 600;
+          color: $color-primary;
+          text-decoration: none;
+          transition: color 0.2s ease;
+          margin-left: 0.25rem;
+
+          &:hover {
+            color: $color-primary-light;
+            text-decoration: underline;
+          }
+        }
+      }
+    }
+  }
+}

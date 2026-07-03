@@ -1,0 +1,299 @@
+// ─── Clean White Premium Theme ───────────────────────────────────────────────
+$color-bg:           #ffffff;
+$color-bg-page:      #f7f7f8;
+$color-border:       #e5e7eb;
+$color-border-focus: #10a37f;
+$color-text-primary: #0d0d0d;
+$color-text-muted:   #6b7280;
+$color-text-label:   #374151;
+$color-brand:        #10a37f;
+$color-brand-hover:  #0d8c6c;
+$color-error-bg:     #fef2f2;
+$color-error-border: #fecaca;
+$color-error-text:   #b91c1c;
+$font-family:        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+// ─── Animations ──────────────────────────────────────────────────────────────
+@keyframes fadeUpIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes driftBlob1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(20px, -15px) scale(1.08); }
+}
+
+@keyframes driftBlob2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(-25px, 18px) scale(1.1); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+// ─── Page Shell ──────────────────────────────────────────────────────────────
+.register-section {
+  position: relative;
+  min-height: 100vh;
+  background: $color-bg-page;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  font-family: $font-family;
+  overflow: hidden;
+  color: $color-text-primary;
+
+  .glow-container {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+
+    .glow-top-left {
+      position: absolute;
+      top: -80px;
+      left: -80px;
+      width: 360px;
+      height: 360px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(16, 163, 127, 0.12) 0%, transparent 70%);
+      filter: blur(60px);
+      animation: driftBlob1 10s ease-in-out infinite alternate;
+    }
+
+    .glow-bottom-right {
+      position: absolute;
+      bottom: -80px;
+      right: -80px;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(16, 163, 127, 0.08) 0%, transparent 70%);
+      filter: blur(60px);
+      animation: driftBlob2 12s ease-in-out infinite alternate;
+    }
+  }
+}
+
+// ─── Center Column ────────────────────────────────────────────────────────────
+.register-center {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 26rem;
+}
+
+// ─── Card ─────────────────────────────────────────────────────────────────────
+.register-card {
+  background: $color-bg;
+  border: 1px solid $color-border;
+  border-radius: 1rem;
+  padding: 2.5rem 2.25rem 2rem;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.06);
+  animation: fadeUpIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: box-shadow 0.3s ease;
+
+  &:hover {
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.05),
+      0 16px 48px rgba(0, 0, 0, 0.09);
+  }
+}
+
+// ─── Heading ──────────────────────────────────────────────────────────────────
+.register-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
+
+  .register-logo {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  h1 {
+    font-family: "Outfit", sans-serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: $color-text-primary;
+    margin: 0;
+  }
+}
+
+.register-subtitle {
+  font-size: 0.875rem;
+  color: $color-text-muted;
+  margin-bottom: 0;
+  line-height: 1.5;
+}
+
+// ─── Alert Banners ────────────────────────────────────────────────────────────
+.auth-alert {
+  margin-top: 1.25rem;
+  padding: 0.7rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.835rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid transparent;
+
+  &--error {
+    background: $color-error-bg;
+    border-color: $color-error-border;
+    color: $color-error-text;
+  }
+
+  &--success {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #15803d;
+  }
+}
+
+// ─── Form ─────────────────────────────────────────────────────────────────────
+.register-form {
+  margin-top: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: $color-text-label;
+      letter-spacing: 0.01em;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+
+      .input-icon {
+        position: absolute;
+        left: 0.875rem;
+        color: #9ca3af;
+        pointer-events: none;
+        transition: color 0.2s ease;
+      }
+
+      input {
+        width: 100%;
+        background: #ffffff;
+        border: 1px solid $color-border;
+        border-radius: 0.625rem;
+        padding: 0.7rem 1rem 0.7rem 2.5rem;
+        font-size: 0.9rem;
+        color: $color-text-primary;
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        font-family: $font-family;
+
+        &::placeholder {
+          color: #c4c9d4;
+        }
+
+        &:focus {
+          border-color: $color-border-focus;
+          box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1);
+        }
+
+        &:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+          background: #f9fafb;
+        }
+      }
+
+      &:focus-within .input-icon {
+        color: $color-brand;
+      }
+    }
+  }
+
+  // Submit Button
+  .submit-btn {
+    width: 100%;
+    border-radius: 0.625rem;
+    background: $color-brand;
+    padding: 0.72rem 1.2rem;
+    font-weight: 600;
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    margin-top: 0.35rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    font-family: $font-family;
+
+    &:hover:not(:disabled) {
+      background: $color-brand-hover;
+      box-shadow: 0 4px 16px rgba(16, 163, 127, 0.25);
+      transform: translateY(-1px);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .btn-spinner-container {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+
+      .btn-spinner {
+        width: 0.9rem;
+        height: 0.9rem;
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+    }
+  }
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+.register-footer {
+  margin-top: 1.75rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: $color-text-muted;
+
+  a {
+    font-weight: 600;
+    color: $color-brand;
+    text-decoration: none;
+    margin-left: 0.25rem;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: $color-brand-hover;
+      text-decoration: underline;
+    }
+  }
+}
