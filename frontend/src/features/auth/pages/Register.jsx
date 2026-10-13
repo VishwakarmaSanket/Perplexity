@@ -1,15 +1,18 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { useAuth } from "../hooks/useAuth.js";
 import { useSelector, useDispatch } from "react-redux";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
+
+import { useAuth } from "../hooks/useAuth.js";
 import { setError } from "../auth.slice.js";
-import { User, Mail, Lock } from "lucide-react";
+import "../styles/login.scss";
 import "../styles/register.scss";
 
 const Register = () => {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
   const { handleRegister } = useAuth();
@@ -21,138 +24,161 @@ const Register = () => {
 
   const submitForm = async (event) => {
     event.preventDefault();
+
     setSuccessMsg("");
     dispatch(setError(null));
 
-    const payload = {
+    const success = await handleRegister({
       username,
       email,
       password,
-    };
+    });
 
-    const success = await handleRegister(payload);
     if (success) {
-      setSuccessMsg(
-        "Account created! You can now sign in.",
-      );
+      setSuccessMsg("Account created successfully.");
       setUsername("");
       setEmail("");
       setPassword("");
+      setShowPassword(false);
     }
   };
 
   return (
-    <section className="register-section animate-in fade-in">
-      {/* Background blobs */}
-      <div className="glow-container">
-        <div className="glow-top-left animate-pulse" />
-        <div className="glow-bottom-right" />
-      </div>
+    <main className="login-page">
+      <header className="auth-header">
+        <Link to="/" className="auth-brand" aria-label="Perplexity home">
+          <img src="/assets/AI_Logo.png" alt="" />
+          <span>perplexity</span>
+        </Link>
 
-      {/* Center Container */}
-      <div className="register-center">
-        {/* Card */}
-        <div className="register-card">
-          {/* Heading */}
-          <div className="register-heading">
-            <div className="register-logo">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <circle cx="16" cy="16" r="16" fill="#10a37f" />
-                <path d="M10 16h12M16 10v12" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <h1>Create account</h1>
+        <div className="login-topbar">
+          <span>Already have an account?</span>
+          <Link to="/login" className="topbar-link">
+            Sign in <ArrowRight size={15} />
+          </Link>
+        </div>
+      </header>
+
+      <section className="login-main">
+        <div className="login-form-container">
+          <div className="form-heading">
+            <h1>Create your account</h1>
+            <p>
+              Start exploring ideas, finding answers, and learning something
+              new.
+            </p>
           </div>
-          <p className="register-subtitle">
-            Join Perplexity and start exploring.
-          </p>
 
           {error && (
-            <div className="auth-alert auth-alert--error animate-in slide-in-from-bottom-4">
-              <span>⚠️ {error}</span>
+            <div className="login-error" role="alert">
+              <span className="error-indicator">!</span>
+              <span>{error}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="auth-alert auth-alert--success animate-in slide-in-from-bottom-4">
-              <span>✅ {successMsg}</span>
+            <div className="register-success" role="status">
+              <span className="success-indicator">
+                <CheckIcon />
+              </span>
+              <span>{successMsg}</span>
+
+              <button
+                type="button"
+                className="success-login-link"
+                onClick={() => navigate("/login")}
+              >
+                Sign in
+              </button>
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={submitForm} className="register-form">
-            {/* Username */}
-            <div className="form-group">
-              <label htmlFor="username">Username</label>
-              <div className="input-wrapper">
-                <User className="input-icon" size={16} />
-                <input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  placeholder="Choose a username"
-                  required
-                  disabled={loading}
-                />
-              </div>
+          <form onSubmit={submitForm} className="login-form">
+            <div className="login-field">
+              <label htmlFor="register-username">Username</label>
+              <input
+                id="register-username"
+                type="text"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="Choose a username"
+                autoComplete="username"
+                required
+                disabled={loading}
+              />
             </div>
 
-            {/* Email */}
-            <div className="form-group">
-              <label htmlFor="email">Email address</label>
-              <div className="input-wrapper">
-                <Mail className="input-icon" size={16} />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  required
-                  disabled={loading}
-                />
-              </div>
+            <div className="login-field">
+              <label htmlFor="register-email">Email address</label>
+              <input
+                id="register-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="name@example.com"
+                autoComplete="email"
+                required
+                disabled={loading}
+              />
             </div>
 
-            {/* Password */}
-            <div className="form-group">
-              <label htmlFor="password">Password</label>
-              <div className="input-wrapper">
-                <Lock className="input-icon" size={16} />
+            <div className="login-field">
+              <label htmlFor="register-password">Password</label>
+
+              <div className="password-input">
                 <input
-                  id="password"
-                  type="password"
+                  id="register-password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="At least 6 characters"
+                  autoComplete="new-password"
+                  minLength={6}
                   required
                   disabled={loading}
                 />
+
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((current) => !current)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  disabled={loading}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
-            {/* Button */}
-            <button type="submit" className="submit-btn" disabled={loading}>
+            <button type="submit" className="login-submit" disabled={loading}>
               {loading ? (
-                <div className="btn-spinner-container">
-                  <div className="btn-spinner" />
-                  <span>Creating account...</span>
-                </div>
+                <>
+                  <span className="login-spinner" />
+                  Creating account...
+                </>
               ) : (
-                "Create account"
+                <>
+                  Create account
+                  <ArrowRight size={17} />
+                </>
               )}
             </button>
           </form>
 
-          {/* Footer */}
-          <p className="register-footer">
+          <p className="login-register">
             Already have an account? <Link to="/login">Sign in</Link>
           </p>
         </div>
-      </div>
-    </section>
+
+        <footer className="login-bottom">Curiosity has no limits.</footer>
+      </section>
+    </main>
   );
 };
+
+function CheckIcon() {
+  return <span aria-hidden="true">✓</span>;
+}
 
 export default Register;

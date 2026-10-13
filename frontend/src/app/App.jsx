@@ -9,7 +9,7 @@ const App = () => {
 
   useEffect(() => {
     auth.handleGetMe();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <RouterProvider router={router} />;
 };

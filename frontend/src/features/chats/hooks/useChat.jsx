@@ -92,9 +92,11 @@ export const useChat = () => {
           }),
         );
       }
+      return true;
     } catch (err) {
       console.error("Error in handleSendMessage:", err);
       dispatch(setError(err.message));
+      return false;
     } finally {
       dispatch(setIsLoading(false));
     }
@@ -133,9 +135,11 @@ export const useChat = () => {
           }),
         );
       }
+      return true;
     } catch (err) {
       console.error("Error in handleGenerateImage:", err);
       dispatch(setError(err.message));
+      return false;
     } finally {
       dispatch(setIsLoading(false));
     }
@@ -143,22 +147,28 @@ export const useChat = () => {
 
   async function handleGetChats() {
     dispatch(setIsLoading(true));
-    const data = await getChats();
-    const { chats } = data;
-    const chatsMap = chats.reduce((acc, chat) => {
-      acc[chat._id] = {
-        id: chat._id,
-        title: chat.title,
-        messages: [],
-        lastUpdated: chat.updatedAt,
-      };
-      return acc;
-    }, {});
-    dispatch(setChats(chatsMap));
-    if (currentChatId && !chatsMap[currentChatId]) {
-      dispatch(setCurrentChatId(null));
+    try {
+      const data = await getChats();
+      const { chats } = data;
+      const chatsMap = chats.reduce((acc, chat) => {
+        acc[chat._id] = {
+          id: chat._id,
+          title: chat.title,
+          messages: [],
+          lastUpdated: chat.updatedAt,
+        };
+        return acc;
+      }, {});
+      dispatch(setChats(chatsMap));
+      if (currentChatId && !chatsMap[currentChatId]) {
+        dispatch(setCurrentChatId(null));
+      }
+    } catch (err) {
+      console.error("Error in handleGetChats:", err);
+      dispatch(setError(err.response?.data?.message || "Unable to load chats"));
+    } finally {
+      dispatch(setIsLoading(false));
     }
-    dispatch(setIsLoading(false));
   }
 
   async function handleDeleteChat(chatID) {

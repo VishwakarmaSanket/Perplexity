@@ -8,13 +8,20 @@ import cors from "cors";
 
 const app = express();
 
+// Preserve the original HTTPS protocol when running behind Render or another reverse proxy.
+app.set("trust proxy", 1);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://perplexity-1-5gaq.onrender.com"],
+    origin: [
+      "http://localhost:5173",
+      "https://perplexity-1-5gaq.onrender.com",
+      "https://perplexity-59tg.onrender.com",
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   }),

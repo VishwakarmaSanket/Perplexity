@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 
 export async function initializeSocketConnection() {
-  const socket = io(import.meta.env.VITE_API_URL, {
+  const socket = io(import.meta.env.VITE_API_URL || undefined, {
     withCredentials: true,
   });
   socket.on("connect", () => {

@@ -110,7 +110,12 @@ export async function generateImage(req, res) {
     });
 
     console.log("🤖 [generateImage] Calling generateGrokImage...");
-    const imageUrl = await generateGrokImage(prompt);
+    const imagePath = await generateGrokImage(prompt);
+    // Persist an absolute backend URL so a separately hosted frontend can load the image.
+    const imageUrl = new URL(
+      imagePath,
+      `${req.protocol}://${req.get("host")}`,
+    ).toString();
 
     const aiMessage = await messageModel.create({
       chat: chatID || chat._id,

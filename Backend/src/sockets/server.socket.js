@@ -8,6 +8,7 @@ export function initSocket(httpServer) {
       origin: [
         "http://localhost:5173",
         "https://perplexity-1-5gaq.onrender.com",
+        "https://perplexity-59tg.onrender.com",
       ],
       credentials: true,
     },

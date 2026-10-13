@@ -17,18 +17,19 @@ export async function generateGrokImage(prompt) {
     let base64Data = null;
 
     try {
-      const response = await ai.models.generateImages({
-        model: "imagen-3.0-generate-002",
-        prompt: prompt,
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-image",
+        contents: prompt,
         config: {
-          numberOfImages: 1,
-          outputMimeType: "image/png",
+          responseModalities: ["IMAGE"],
         },
       });
 
-      const generatedImage = response.generatedImages?.[0];
-      if (generatedImage && generatedImage.image && generatedImage.image.imageBytes) {
-        base64Data = generatedImage.image.imageBytes;
+      const imagePart = response.candidates?.[0]?.content?.parts?.find(
+        (part) => part.inlineData?.data,
+      );
+      if (imagePart?.inlineData?.data) {
+        base64Data = imagePart.inlineData.data;
       }
     } catch (apiError) {
       console.warn("⚠️ Gemini Image API failed or quota exceeded. Falling back to public image generator:", apiError.message);
@@ -90,7 +91,8 @@ export async function generateGrokImage(prompt) {
     }
 
     // Return the URL to access the image statically
-    return `http://localhost:3000/public/images/${filename}`;
+    // Use the current origin in both local and deployed environments.
+    return `/public/images/${filename}`;
   } catch (error) {
     throw new Error(`Gemini Image Generation failed: ${error.message}`);
   }

@@ -24,6 +24,9 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Palette,
+  PenLine,
+  Compass,
 } from "lucide-react";
 import { setCurrentChatId } from "../chat.slice";
 const LogoImage = "/assets/AI_Logo.png";
@@ -47,8 +50,9 @@ const Dashboard = () => {
   const chatsMap = useSelector((state) => state.chat.chats);
   const chatsList = Object.values(chatsMap);
   const currentChatId = useSelector((state) => state.chat.currentChatId);
+  const chatError = useSelector((state) => state.chat.error);
   const user = useSelector((state) => state.auth.user);
-  const isLoading = useSelector((state) => state.chat.isLoading);
+  // const isLoading = useSelector((state) => state.chat.isLoading);
 
   // Initialize socket connection and load chats
   useEffect(() => {
@@ -68,13 +72,18 @@ const Dashboard = () => {
     const trimmedMessage = chatInput.trim();
     if (!trimmedMessage) return;
 
+    let request;
     if (isImageMode) {
-      chat.handleGenerateImage(currentChatId, trimmedMessage);
+      request = chat.handleGenerateImage(currentChatId, trimmedMessage);
       setIsImageMode(false);
     } else {
-      chat.handleSendMessage(currentChatId, trimmedMessage, webSearch);
+      request = chat.handleSendMessage(currentChatId, trimmedMessage, webSearch);
     }
-    setChatInput("");
+
+    // Keep failed/slow requests visible so the user can retry instead of losing the prompt.
+    Promise.resolve(request).then((succeeded) => {
+      if (succeeded) setChatInput("");
+    });
   };
 
   // Handles inline formatting inside a single line
@@ -161,10 +170,13 @@ const Dashboard = () => {
   };
   // Filter conversations based on local search query
   const filteredChatsList = chatsList.filter((chatItem) =>
-    chatItem.title?.toLowerCase().includes(searchQuery.toLowerCase())
+    chatItem.title?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const hasMessages = currentChatId && chatsMap[currentChatId]?.messages && chatsMap[currentChatId].messages.length > 0;
+  const hasMessages =
+    currentChatId &&
+    chatsMap[currentChatId]?.messages &&
+    chatsMap[currentChatId].messages.length > 0;
 
   // Reusable input form component
   const renderInputForm = (isCentered = false) => {
@@ -173,7 +185,11 @@ const Dashboard = () => {
         onSubmit={handleSendMessage}
         className={`chatInterface__inputWrapper ${isCentered ? "chatInterface__inputWrapper--centered" : ""}`}
       >
-        <button type="button" className="chatInterface__attachButton" title="Attach file">
+        <button
+          type="button"
+          className="chatInterface__attachButton"
+          title="Attach file"
+        >
           <Paperclip size={18} />
         </button>
 
@@ -210,7 +226,11 @@ const Dashboard = () => {
           </div>
         )}
 
-        <button type="submit" className="chatInterface__sendButton" title="Send message">
+        <button
+          type="submit"
+          className="chatInterface__sendButton"
+          title="Send message"
+        >
           <ArrowUp size={18} />
         </button>
       </form>
@@ -222,7 +242,9 @@ const Dashboard = () => {
       className={`main-dashboard ${isLightMode ? "theme-light" : "theme-dark"} ${isSidebarOpen ? "sidebar-open" : "sidebar-closed"}`}
     >
       {/* Sidebar */}
-      <section className={`sidebar ${isSidebarOpen ? "" : "sidebar--collapsed"}`}>
+      <section
+        className={`sidebar ${isSidebarOpen ? "" : "sidebar--collapsed"}`}
+      >
         <div className="sidebar__top">
           <div className="sidebar__logo">
             <img
@@ -267,9 +289,6 @@ const Dashboard = () => {
 
         <div className="sidebar__history">
           <div className="sidebar__historyHeader">
-            <button>
-              <History size={20} />
-            </button>
             <h2 className="sidebar__heading">Chat History</h2>
           </div>
 
@@ -295,9 +314,7 @@ const Dashboard = () => {
                       }
                     }}
                   >
-                    <span className="sidebar__itemTitle">
-                      {chatItem.title}
-                    </span>
+                    <span className="sidebar__itemTitle">{chatItem.title}</span>
                     <button
                       className="sidebar__itemDelete"
                       onClick={(e) => {
@@ -330,7 +347,9 @@ const Dashboard = () => {
             <div className="sidebar__profileInfo">
               <div className="sidebar__avatar" />
               <div>
-                <p className="sidebar__username">{user?.username || "Guest User"}</p>
+                <p className="sidebar__username">
+                  {user?.username || "Guest User"}
+                </p>
               </div>
             </div>
 
@@ -366,7 +385,7 @@ const Dashboard = () => {
 
       {/* Chat Interface */}
       <section className="chatInterface">
-        {/* Top Header Bar */}
+        {/* Top Header Bar
         <header className="chatInterface__header">
           <div className="chatInterface__headerLeft">
             {!isSidebarOpen && (
@@ -385,16 +404,23 @@ const Dashboard = () => {
           </div>
           <div className="chatInterface__headerRight">
             <button className="chatInterface__headerButton">Share</button>
-            <button className="chatInterface__headerButton" onClick={() => setIsMenuOpen((prev) => !prev)}>Options</button>
+            <button
+              className="chatInterface__headerButton"
+              onClick={() => setIsMenuOpen((prev) => !prev)}
+            >
+              Options
+            </button>
           </div>
-        </header>
+        </header> */}
 
         <div className="chatInterface__content">
           <div className="chatInterface__messages">
             {!hasMessages ? (
               <div className="chatInterface__emptyState">
-                <h2 className="chatInterface__emptyHeading">Where should we begin?</h2>
-                
+                <h2 className="chatInterface__emptyHeading">
+                  Where should we begin?
+                </h2>
+
                 {/* Centered input box exactly like ChatGPT home view */}
                 <div className="chatInterface__emptyInputContainer">
                   {renderInputForm(true)}
@@ -405,7 +431,9 @@ const Dashboard = () => {
                     type="button"
                     className="chatInterface__promptCard"
                     onClick={() => {
-                      setChatInput("A futuristic cyberpunk city skyline at sunset");
+                      setChatInput(
+                        "A futuristic cyberpunk city skyline at sunset",
+                      );
                       setIsImageMode(true);
                     }}
                   >
@@ -416,7 +444,9 @@ const Dashboard = () => {
                   <button
                     type="button"
                     className="chatInterface__promptCard"
-                    onClick={() => setChatInput("Write or edit a JavaScript function...")}
+                    onClick={() =>
+                      setChatInput("Write or edit a JavaScript function...")
+                    }
                   >
                     <span className="chatInterface__promptIcon">✍️</span>
                     <span>Write or edit</span>
@@ -462,7 +492,9 @@ const Dashboard = () => {
                     {msgId && (
                       <button
                         className="chatInterface__messageDelete"
-                        onClick={() => chat.handleDeleteMessage(currentChatId, msgId)}
+                        onClick={() =>
+                          chat.handleDeleteMessage(currentChatId, msgId)
+                        }
                         title="Delete Message"
                       >
                         <Trash2 size={13} />
@@ -473,17 +505,20 @@ const Dashboard = () => {
               })
             )}
 
-            {isLoading && (
+            {/* {isLoading && (
               <div className="chatInterface__message chatInterface__message--ai chatInterface__message--loading">
                 <div className="chatInterface__text">
-                  <div className="chatInterface__loader" aria-label="Assistant is typing">
+                  <div
+                    className="chatInterface__loader"
+                    aria-label="Assistant is typing"
+                  >
                     <span />
                     <span />
                     <span />
                   </div>
                 </div>
               </div>
-            )}
+            )} */}
           </div>
         </div>
 
@@ -496,26 +531,14 @@ const Dashboard = () => {
             </div>
           </div>
         )}
+        {chatError && (
+          <div className="chatInterface__error" role="alert">
+            {chatError}
+          </div>
+        )}
       </section>
     </main>
   );
 };
 
 export default Dashboard;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

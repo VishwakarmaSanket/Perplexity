@@ -51,6 +51,9 @@ export async function register(req, res) {
     );
 
     try {
+      const apiOrigin =
+        process.env.PUBLIC_API_URL || `${req.protocol}://${req.get("host")}`;
+
       await sendEmail({
         to: email,
         subject: "🎉 Welcome to Perplexity – Let's Get Started!",
@@ -58,7 +61,7 @@ export async function register(req, res) {
          <p>Hi ${username},</p>
                     <p>Thank you for registering at <strong>Perplexity</strong>. We're excited to have you on board!</p>
                     <p>Please verify your email address by clicking the link below:</p>
-                    <a href="http://localhost:3000/api/auth/verify-email?token=${emailVerificationToken}">Verify Email</a>
+                    <a href="${apiOrigin}/api/auth/verify-email?token=${emailVerificationToken}">Verify Email</a>
                     <p>If you did not create an account, please ignore this email.</p>
                     <p>Best regards,<br>The Perplexity Team</p>
             `,
@@ -152,9 +155,12 @@ export async function login(req, res) {
       process.env.JWT_SECRET,
     );
 
+    const isSecureRequest = req.secure || req.headers["x-forwarded-proto"] === "https";
+
     res.cookie("token", token, {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: isSecureRequest ? "none" : "lax",
+      secure: isSecureRequest,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 

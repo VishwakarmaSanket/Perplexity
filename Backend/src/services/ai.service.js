@@ -12,6 +12,26 @@ if (!ai) {
   console.warn("⚠️ GEMINI_API_KEY is missing in your .env file! AI features will fail.");
 }
 
+const GEMINI_MODEL = "gemini-3.8-flash";
+const transientStatusCodes = new Set([429, 500, 502, 503, 504]);
+
+async function generateContentWithRetry(request, retries = 3) {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await ai.models.generateContent(request);
+    } catch (error) {
+      const shouldRetry = transientStatusCodes.has(error.status) && attempt < retries;
+      if (!shouldRetry) throw error;
+
+      const delay = 750 * 2 ** attempt;
+      console.warn(
+        `Gemini request failed with ${error.status}; retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 // Generate chat title
 export async function generateChatTitle(message) {
   try {
@@ -19,8 +39,8 @@ export async function generateChatTitle(message) {
       throw new Error("Google GenAI client is not initialized.");
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+    const response = await generateContentWithRetry({
+      model: GEMINI_MODEL,
       contents: `Generate a title for this message: "${message}"`,
       config: {
         systemInstruction: `You are an AI assistant that generates concise, clear, and engaging titles for chat conversations.
@@ -34,7 +54,10 @@ Return only the title and nothing else.`
     return response.text.trim();
   } catch (err) {
     console.error("Error generating chat title:", err);
-    throw new Error("Failed to generate chat title");
+    if (transientStatusCodes.has(err.status)) {
+      return "New chat";
+    }
+    throw new Error(`Failed to generate chat title: ${err.message}`);
   }
 }
 
@@ -82,8 +105,8 @@ RULES:
       systemInstruction = "You are a helpful and concise AI assistant. Answer the user directly without using any external tools.";
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+    const response = await generateContentWithRetry({
+      model: GEMINI_MODEL,
       contents: contents,
       config: {
         systemInstruction: systemInstruction,
