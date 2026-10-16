@@ -482,3 +482,174 @@ Deleting an AI message does not delete its user prompt. Prompt + child-response 
 ### 4.14 Static assets and unknown routes
 
 Static files are served from `path.join(process.cwd(), "public")` at URL prefix `/public`. Generated images are also written relative to `process.cwd()`; execution working directory therefore determines whether generated files land in the directory being served. Unknown application paths use Express's default 404 behavior; no catch-all JSON handler is registered.
+
+
+## 5. Authentication and account lifecycle
+
+### 5.1 Registration state machine
+
+```mermaid
+flowchart TD
+    A[POST register] --> B{Validation passes?}
+    B -- No --> C[400 validation envelope]
+    B -- Yes --> D{Account exists?}
+    D -- Yes --> E[400 duplicate account]
+    D -- No --> F[Create User and hash password]
+    F --> G{NODE_ENV is production?}
+    G -- No --> H[verified=true; return 201]
+    G -- Yes --> I[verified=false; sign verification token]
+    I --> J[Send Gmail OAuth2 email]
+    J -- Success --> K[Return 201; verification required]
+    J -- Failure --> L[Delete new user; return 500]
+```
+
+NODE_ENV !== "production" selects non-production behavior, including when NODE_ENV is unset. In that mode newly created users are verified immediately and no email is sent.
+
+### 5.2 Password handling
+
+The User model pre-save hook hashes any modified password using bcryptjs with 10 salt rounds. The comparePassword method calls bcrypt.compare. A password-reset route and password-change endpoint are not registered. Registration validation checks the password before the pre-save hook stores its hash.
+
+### 5.3 JWT cookie and middleware
+
+The login controller signs the payload containing id and username using JWT_SECRET, then stores it in the httpOnly cookie named token. The cookie max age is seven days; Secure and SameSite depend on how the request protocol is detected.
+
+The authUser middleware does not query MongoDB or check the current verified value. It verifies the JWT and assigns decoded claims to req.user. A deleted or unverified user whose token still verifies is not rejected by this middleware alone; protected controllers must still enforce resource ownership.
+
+**Expiry distinction:** no expiresIn is passed to jwt.sign. Browser cookie expiration is not the same as a JWT exp claim. The current signed token has no explicit expiry configured.
+
+### 5.4 Session restore and logout
+
+- Frontend App calls handleGetMe on mount.
+- Auth Redux state begins with user=null, loading=true and error=null.
+- Protected renders a spinner while loading, then redirects to /login when user is missing.
+- handleLogout calls the logout route and clears Redux user/chat state and currentChatId in a finally block, even if the request fails.
+- Logout clears the token cookie with httpOnly and SameSite=Lax. These options do not mirror login's HTTPS branch, which can set SameSite=None and Secure. Deployed cross-origin cookie clearing should be verified.
+
+### 5.5 Verification email
+
+The mail service creates a Nodemailer Gmail transporter at module import using GOOGLE_USER, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN. It invokes transporter.verify() and logs success/failure. sendEmail calls transporter.sendMail() and logs the returned details.
+
+Production registration places the verification JWT in an email URL. The HTML response after verification contains a hard-coded localhost login URL. The current username validator restricts characters to alphanumeric and underscore, but HTML template values should still be escaped as a general security practice.
+
+## 6. Chat and AI request lifecycle
+
+### 6.1 Text response sequence
+
+```mermaid
+sequenceDiagram
+    participant UI as Dashboard/useChat
+    participant API as POST /api/chats/message
+    participant DB as MongoDB
+    participant AI as ai.service
+    participant Tavily
+    participant Gemini as Google GenAI
+    UI->>API: message, chatID?, webSearch?
+    API->>API: authUser validates cookie
+    alt New chat
+      API->>AI: generateChatTitle(message)
+      AI->>Gemini: Generate title
+      Gemini-->>AI: Title text
+      API->>DB: Create Chat
+    end
+    API->>DB: Insert User Message
+    API->>DB: Read chat Messages
+    opt webSearch truthy
+      API->>Tavily: Search last user prompt
+      Tavily-->>AI: JSON results or handled failure text
+    end
+    API->>Gemini: Generate response from history and instruction
+    Gemini-->>API: Response text
+    API->>DB: Insert AI Message parented to prompt
+    API-->>UI: title, chat, aiMessage
+    UI->>UI: Update Redux messages
+```
+
+### 6.2 New chat title
+
+When chatID is falsy, sendMessage calls generateChatTitle(message) before creating a Chat. The title service asks Gemini for a concise 2–3 word title and trims response.text. If the provider status belongs to the configured transient set, title generation returns "New chat"; other errors throw and abort before the Chat is created.
+
+### 6.3 Conversation-history conversion
+
+The controller retrieves messages using messageModel.find({ chat: targetChatId }), then generateResponse maps each document:
+- role user becomes Gemini role user;
+- every non-user role becomes Gemini role model;
+- content becomes parts containing a text value.
+
+No explicit sort order or history truncation is added. The complete returned history is sent on every text request. Long conversations therefore increase prompt size, latency and provider usage. Stored image responses are Markdown strings and are also passed to the text model as history text.
+
+### 6.4 Standard response versus web-search mode
+
+In standard mode, the system instruction asks Gemini to answer directly without external tools.
+
+When webSearch is truthy:
+1. The service reverses the in-memory message array and finds the last item whose role is user.
+2. It calls searchInternet with that message's content.
+3. The Tavily wrapper requests at most five results with searchDepth set to advanced.
+4. The result object is serialized with JSON.stringify.
+5. That JSON is inserted into the Gemini system instruction, which asks the model to use it and acknowledge absent or inconclusive evidence.
+6. Gemini returns free-form response text.
+
+If Tavily throws, generateResponse catches the search exception and substitutes "No search results available (search failed)." Gemini is still called with the instruction asking it to disclose failed/inconclusive search.
+
+This is retrieval-augmented prompt context, not vector search. The Message schema does not store structured source/citation records; the frontend receives generated text.
+
+### 6.5 Gemini client and retry policy
+
+ai.service.js initializes GoogleGenAI only if GEMINI_API_KEY exists and logs a warning if it does not. The active text model constant is gemini-3.8-flash in the checked-in code.
+
+generateContentWithRetry(request, retries=3) retries only errors whose status is 429, 500, 502, 503 or 504. The initial attempt plus up to three retries are possible. Wait durations are 750ms, 1500ms and 3000ms before retry attempts.
+
+- generateChatTitle returns "New chat" for transient status codes recognized by its catch branch; non-transient errors are wrapped and thrown.
+- generateResponse wraps model failures as "Failed to generate response: ..." and does not generate a fallback answer when Gemini itself fails.
+- No server-side AI streaming, request cancellation, or provider call timeout is implemented in this service.
+
+## 7. Image generation lifecycle
+
+### 7.1 Actual provider
+
+The controller imports a function named generateGrokImage, but that function is not a Grok API integration. Backend/src/services/image.service.js uses Google's GoogleGenAI client with model gemini-3.1-flash-image and requests image response modality.
+
+### 7.2 Image generation and fallback
+
+```mermaid
+flowchart TD
+    A[Authenticated image request] --> B[Prompt truthiness check]
+    B --> C{chatID supplied?}
+    C -- No --> D[Generate title and create Chat]
+    C -- Yes --> E[Use supplied ID without owner check]
+    D --> F[Insert user prompt Message]
+    E --> F
+    F --> G[Call Gemini image model]
+    G --> H{Inline image bytes found?}
+    H -- Yes --> I[Decode base64]
+    H -- No/API error --> J[Create keyword LoremFlickr URL]
+    J --> K{Valid non-placeholder response?}
+    K -- Yes --> L[Use fetched bytes]
+    K -- No --> M[Fetch Picsum image]
+    I --> N[Write random .png file under public/images]
+    L --> N
+    M --> N
+    N --> O[Return /public/images path]
+    O --> P[Persist Markdown AI Message]
+    P --> Q[Return 201]
+```
+
+### 7.3 Fallback logic
+
+1. The service checks GEMINI_API_KEY; if missing, it throws immediately and does not use the remote-image fallbacks.
+2. It requests Gemini image generation.
+3. Provider exceptions are logged and trigger fallback; a response with no image part also falls back.
+4. It creates process.cwd()/public/images if absent.
+5. It creates a random filename from 16 cryptographic bytes and appends .png.
+6. It lowercases the prompt, strips punctuation and common generation words, selects up to three terms longer than two characters, and builds a LoremFlickr URL.
+7. It fetches a LoremFlickr 800×600 URL with those keywords and a random query value.
+8. It falls back to Picsum Photos at 800×600 when the request fails, is non-OK, redirects to defaultImage, has no buffer, or returns the known 126099-byte placeholder size.
+9. It writes the chosen bytes to disk and returns a path under /public/images.
+
+LoremFlickr and Picsum provide photographs/placeholders; they do not guarantee that the result matches the prompt and are not AI image generation. The code writes every returned byte sequence to a .png filename without transcoding, so the extension does not guarantee PNG encoding.
+
+### 7.4 Filesystem and failure paths
+
+Express serves files from process.cwd()/public; the generator also writes under process.cwd()/public/images. The process working directory therefore matters. If started from an unexpected directory, image writes may not land in the directory being served.
+
+Gemini image failure is caught so fallbacks can be attempted. Errors from Picsum, filesystem operations, or the outer service are rethrown with the prefix "Gemini Image Generation failed:". The controller returns 500. If the prompt Message was saved before an image failure, it remains. If a file is written but subsequent Message insertion fails, it can be orphaned.
