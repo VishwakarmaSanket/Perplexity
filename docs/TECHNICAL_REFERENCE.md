@@ -1,0 +1,1073 @@
+# Perplexity Clone — Technical Reference
+
+This reference describes the implementation present in the repository's main branch. It traces requests from the React UI through Express controllers, MongoDB models, Gemini/Tavily integrations, static image serving, and Socket.IO. It distinguishes verified source behavior from implementation risks and externally controlled behavior.
+
+## Contents
+
+1. [Scope and architecture](#1-scope-and-architecture)
+2. [Repository and execution entry points](#2-repository-and-execution-entry-points)
+3. [Configuration and startup](#3-configuration-and-startup)
+4. [HTTP API reference](#4-http-api-reference)
+5. [Authentication and account lifecycle](#5-authentication-and-account-lifecycle)
+6. [Chat and AI request lifecycle](#6-chat-and-ai-request-lifecycle)
+7. [Image generation lifecycle](#7-image-generation-lifecycle)
+8. [Data models and relationships](#8-data-models-and-relationships)
+9. [Frontend state and UI flows](#9-frontend-state-and-ui-flows)
+10. [Socket.IO behavior](#10-socketio-behavior)
+11. [External services and dependencies](#11-external-services-and-dependencies)
+12. [Security and failure observations](#12-security-and-failure-observations)
+13. [Operations and troubleshooting](#13-operations-and-troubleshooting)
+14. [File-level traceability](#14-file-level-traceability)
+
+## 1. Scope and architecture
+
+### 1.1 Application capabilities
+
+Perplexity is a full-stack conversational AI application. The current code implements registration/login, cookie-based JWT authentication, user-owned chat history, text conversations with Gemini, an optional Tavily-backed web-search context path, image generation with fallback image providers, chat/message deletion, and a React UI with light/dark themes.
+
+The system has two application processes:
+
+- **Backend:** Node.js ES modules, Express 5, Mongoose/MongoDB, provider service modules, and a Socket.IO server attached to the HTTP server.
+- **Frontend:** React, Vite, Redux Toolkit, React Router, Axios, SCSS/Tailwind tooling, Markdown rendering, syntax highlighting, and a Socket.IO client.
+
+The repository does **not** currently implement AI token streaming over Socket.IO. The Socket.IO server logs client connection/disconnection only; chat and image operations use REST. The web-search path retrieves Tavily results and inserts serialized results into the Gemini system instruction. It does not use vector embeddings or a vector database.
+
+### 1.2 System architecture
+
+```mermaid
+flowchart LR
+    Browser[React frontend] -->|REST + cookie| API[Express app]
+    Browser <-->|Socket.IO lifecycle| Socket[Socket.IO server]
+    API --> Auth[Auth routes/controllers]
+    API --> Chat[Chat routes/controllers]
+    Auth --> Users[(MongoDB User)]
+    Chat --> Chats[(MongoDB Chat)]
+    Chat --> Messages[(MongoDB Message)]
+    Chat --> AI[AI service]
+    AI --> Gemini[Google GenAI]
+    AI --> Search[Tavily search]
+    Chat --> Image[Image service]
+    Image --> GeminiImage[Gemini image model]
+    Image --> Fallback[LoremFlickr / Picsum]
+    Image --> Disk[public/images]
+    API --> Static[Express /public mount]
+    Disk --> Static
+    Auth --> Mail[Nodemailer Gmail OAuth2]
+```
+
+### 1.3 Request classes
+
+| Class | Transport | Authentication | Behavior |
+|---|---|---|---|
+| Auth REST | HTTP JSON | Register/login/verify/logout are public; get-me requires cookie | Account creation, login, session lookup, verification, logout |
+| Chat REST | HTTP JSON | All chat routes use authUser | Text prompt, image generation, chat/message retrieval and deletion |
+| Static files | HTTP static mount | No auth middleware | Serves files under backend public directory, including generated images |
+| Socket.IO | Socket.IO polling/WebSocket | No socket authentication middleware configured | Connection/disconnection logging only |
+
+### 1.4 Architecture boundaries
+
+- MongoDB stores users, chats and messages.
+- Redux holds the current client-side chat map. Only the selected chat ID is persisted in browser Local Storage.
+- Axios sends cookies because the shared client enables withCredentials.
+- No queue, background worker, cron task, distributed cache, object-storage provider, message pagination, or transaction framework is implemented.
+- Provider APIs, email delivery, static file access and browser cookie policies may fail independently.
+
+## 2. Repository and execution entry points
+
+### 2.1 Backend
+
+| Path | Responsibility |
+|---|---|
+| `Backend/server.js` | Loads dotenv configuration, creates an HTTP server, initializes Socket.IO, starts MongoDB connection and listens |
+| `Backend/src/app.js` | Express middleware, CORS, root response, static files and route mounts |
+| `Backend/src/config/database.js` | Mongoose connection using MONGODB_URI |
+| `Backend/src/routes/auth.route.js` | Auth endpoint registrations |
+| `Backend/src/routes/chats.route.js` | Chat endpoint registrations |
+| `Backend/src/controllers/auth.controller.js` | Registration, login, profile lookup, verification and logout |
+| `Backend/src/controllers/chat.controller.js` | Text/image workflows, chat/message retrieval and deletion |
+| `Backend/src/middlewares/auth.middleware.js` | Reads and verifies the token cookie |
+| `Backend/src/validators/auth.validator.js` | Registration/login validation |
+| `Backend/src/models/user.model.js` | User schema, password hash hook and compare method |
+| `Backend/src/models/chat.model.js` | Chat schema |
+| `Backend/src/models/message.model.js` | Message schema and parent-message link |
+| `Backend/src/services/ai.service.js` | Gemini title/response generation, optional search context and transient retry logic |
+| `Backend/src/services/internet.service.js` | Tavily search wrapper |
+| `Backend/src/services/image.service.js` | Gemini image generation and remote-image fallbacks |
+| `Backend/src/services/mail.service.js` | Nodemailer Gmail OAuth2 transport |
+| `Backend/src/sockets/server.socket.js` | Socket.IO setup and connection/disconnection handlers |
+| `Backend/seed.js` | Test-user seed/reseed script |
+| `Backend/test-oauth.js` | Manual Google refresh-token probe |
+| `Backend/test_gemini.js` | Manual Gemini text-generation probe |
+| `Backend/test_gemini_history.js` | Manual Gemini history probe |
+| `Backend/test_langchain.js` | Manual LangChain Google model probe |
+| `Backend/package.json` | Backend dependencies and scripts |
+| `Backend/public/images/` | Checked-in image files; generated images are also written here relative to the process working directory |
+
+The test files are utility scripts, not an automated integration suite. Backend's current npm test script prints that no test is specified and exits with status 1.
+
+### 2.2 Frontend
+
+| Path | Responsibility |
+|---|---|
+| `frontend/src/main.jsx` | Creates React root and Redux Provider |
+| `frontend/src/api.js` | Shared Axios client, API base URL, credentials and timeout |
+| `frontend/src/app/App.jsx` | Calls get-me on app mount and provides the route tree |
+| `frontend/src/app/app.routes.jsx` | Login/register routes and protected dashboard |
+| `frontend/src/app/app.store.js` | Combines auth and chat reducers |
+| `frontend/src/app/index.css` | Global styling, Tailwind import, focus and animation styles |
+| `frontend/src/features/auth/auth.slice.js` | Auth Redux state |
+| `frontend/src/features/auth/hooks/useAuth.js` | Registration, login, session restore and logout |
+| `frontend/src/features/auth/components/Protected.jsx` | Loading guard and unauthenticated redirect |
+| `frontend/src/features/auth/pages/Login.jsx` | Login form |
+| `frontend/src/features/auth/pages/Register.jsx` | Registration form |
+| `frontend/src/features/auth/services/auth.api.js` | Auth API wrappers |
+| `frontend/src/features/auth/styles/` | Authentication SCSS |
+| `frontend/src/features/chats/chat.slice.js` | Chat map, selection, messages, loading/error state, selected-chat persistence |
+| `frontend/src/features/chats/hooks/useChat.jsx` | Chat API calls and Redux updates |
+| `frontend/src/features/chats/pages/Dashboard.jsx` | Main chat UI, sidebar, renderers, theme and request-mode controls |
+| `frontend/src/features/chats/services/chat.api.js` | Chat API wrappers |
+| `frontend/src/features/chats/services/chat.socket.js` | Socket.IO connection setup and logging |
+| `frontend/src/features/chats/styles/dashboard.scss` | Dashboard and responsive styling |
+| `frontend/vite.config.js` | Vite port and local proxy configuration |
+| `frontend/package.json` | Frontend dependencies and commands |
+| `frontend/.env` | Contains VITE_API_URL configuration; the configured value is not reproduced here |
+
+### 2.3 Active versus auxiliary files
+
+The active frontend entry is `frontend/src/main.jsx` → `frontend/src/app/App.jsx`. Test scripts and `Backend/seed.js` are utilities and are not registered as routes. No Backend .env.example file appears in the inspected tree. Configure local environment values without committing secrets.
+
+## 3. Configuration and startup
+
+### 3.1 Backend startup sequence
+
+**Entry point:** `Backend/server.js`.
+
+1. `import "dotenv/config"` loads dotenv configuration.
+2. The module imports the Express app, database connector and Socket.IO initializer.
+3. `http.createServer(app)` creates one Node HTTP server around Express.
+4. `initSocket(httpServer)` attaches Socket.IO.
+5. `connectDB()` starts the Mongoose connection attempt using `process.env.MONGODB_URI`. Rejection is caught and logged.
+6. The HTTP server immediately calls `listen(process.env.PORT || 8000)`.
+7. A successful listener start logs the port.
+
+**Startup observation:** the database connection is not awaited before listening. The HTTP server can accept requests before MongoDB has connected; a failed connection is logged but does not stop the HTTP listener.
+
+### 3.2 Express middleware order
+
+In `Backend/src/app.js`, middleware is registered in this order:
+
+1. `express.json()`
+2. `express.urlencoded({ extended: true })`
+3. `cookieParser()`
+4. `morgan("dev")`
+5. CORS middleware with a hard-coded origin allowlist, credentials enabled and explicit methods
+6. `GET /` fixed JSON response
+7. Static file mount at `/public`
+8. Router mount at `/api/auth`
+9. Router mount at `/api/chats`
+
+No custom not-found or terminal error middleware is registered after the routers. Controllers with local try/catch return their own error bodies. Uncaught async failures are forwarded by Express 5 to default error handling, which may not return the JSON shape used by controllers.
+
+`app.set("trust proxy", 1)` is configured so Express can interpret the first reverse proxy's protocol headers.
+
+### 3.3 Frontend startup and API client
+
+1. `frontend/src/main.jsx` creates the React root and wraps App in the Redux Provider.
+2. The store combines the auth and chat reducers.
+3. App mounts and invokes `useAuth().handleGetMe()` in an effect.
+4. Protected displays a loading state while auth is loading, then redirects to `/login` if no user exists.
+5. After authentication, route `/` renders Dashboard.
+6. Dashboard mount starts the Socket.IO client and fetches the user's chat list.
+7. The shared Axios client uses `withCredentials: true` and a 60-second timeout.
+
+`frontend/src/api.js` builds the base URL:
+- If `VITE_API_URL` is set, one trailing slash is removed and `/api` is appended.
+- Otherwise, the relative base `/api` is used and Vite's local proxy handles it.
+
+`frontend/vite.config.js` fixes Vite to port 5173 with `strictPort: true` and proxies `/api`, `/public` and `/socket.io` to `http://localhost:3000`. The socket proxy enables WebSocket forwarding.
+
+**Local port mismatch:** Backend `server.js` defaults to port 8000 while the Vite proxy targets port 3000. Local development therefore needs `PORT=3000` for the backend or a matching proxy change.
+
+### 3.4 Environment variables
+
+The table lists names and purposes only; secret values must not be committed or copied into documentation.
+
+| Variable | Read by | Purpose | Behavior |
+|---|---|---|---|
+| `PORT` | `Backend/server.js` | HTTP listening port | Optional; defaults to 8000 |
+| `NODE_ENV` | `auth.controller.js` | Selects development auto-verification versus production email verification | Any value other than exactly `production` selects auto-verification |
+| `MONGODB_URI` | `database.js`, `seed.js` | MongoDB connection string | Required for persistence |
+| `JWT_SECRET` | Auth controller and middleware | Signs/verifies auth and verification JWTs | Required for auth routes |
+| `GEMINI_API_KEY` | AI/image services and manual probes | Google GenAI access | Required for Gemini generation |
+| `TAVILY_API_KEY` | Internet service | Tavily search | Required for actual web-search results |
+| `PUBLIC_API_URL` | Registration controller | Public API base used in verification-email link | Optional; falls back to request protocol and host |
+| `GOOGLE_CLIENT_ID` | Mail service/test script | Gmail OAuth2 client ID | Required for production mail |
+| `GOOGLE_CLIENT_SECRET` | Mail service/test script | Gmail OAuth2 client secret | Required for production mail |
+| `GOOGLE_REFRESH_TOKEN` | Mail service/test script | Gmail OAuth2 refresh token | Required for production mail |
+| `GOOGLE_USER` | Mail service | Gmail sender/account identity | Required for mail delivery |
+| `VITE_API_URL` | Frontend API client and Socket.IO client | Backend origin used outside the relative fallback | Optional in local proxy setup; browser-visible, not a secret |
+
+The tree includes a tracked `frontend/.env` with `VITE_API_URL`; its value is intentionally omitted. Vite-prefixed variables are exposed in frontend code and must never contain private credentials.
+
+### 3.5 Scripts and runtime requirements
+
+Backend:
+- `npm run dev` invokes `npx nodemon server.js`.
+- There is no dedicated `start` script.
+- `npm test` is a placeholder that exits non-zero.
+
+Frontend:
+- `npm run dev` starts Vite.
+- `npm run build` creates `dist/`.
+- `npm run preview` serves the build locally.
+- `npm run lint` runs ESLint.
+
+Direct package version ranges are declared separately in Backend/package.json and frontend/package.json; lockfiles contain the resolved dependency trees.
+
+
+
+## 4. HTTP API reference
+
+### 4.1 Conventions and route inventory
+
+JSON and URL-encoded bodies are parsed in the Express app. Authenticated routes use `authUser`, which reads a cookie named `token`. There is no shared response-envelope contract: error bodies vary by controller, and default Express errors may not be JSON.
+
+| Method | Route | Authentication | Purpose |
+|---|---|---|---|
+| GET | `/` | Public | Fixed server-running response |
+| POST | `/api/auth/register` | Public | Create account |
+| POST | `/api/auth/login` | Public | Check password, issue JWT cookie |
+| GET | `/api/auth/get-me` | Cookie | Fetch current account |
+| GET | `/api/auth/verify-email?token=...` | Query token | Verify email and return HTML |
+| POST | `/api/auth/logout` | Public | Clear cookie |
+| POST | `/api/chats/message` | Cookie | Persist prompt and AI answer |
+| POST | `/api/chats/generate-image` | Cookie | Generate/fetch image and persist Markdown image response |
+| GET | `/api/chats` | Cookie | List current user's chats |
+| GET | `/api/chats/:chatID/messages` | Cookie | Read messages from an owned chat |
+| DELETE | `/api/chats/:chatID` | Cookie | Delete a chat and its messages |
+| DELETE | `/api/chats/:chatID/messages/:messageID` | Cookie | Delete a message and possibly its child AI response |
+
+`GET /public/*` is also served by Express static middleware and is not an application JSON endpoint.
+
+### 4.2 GET /
+
+**Source:** route in `Backend/src/app.js`.
+
+- Input: no route/query/body input.
+- Success: HTTP 200 with `{ "message": "Server is running" }`.
+- Errors and side effects: no application-specific failure handling; request logging is the only usual middleware side effect.
+
+### 4.3 POST /api/auth/register
+
+**Source chain:** `auth.route.js` → `registerValidator` → `validate` → `register()` → User model → optional `sendEmail()`.
+
+Request body:
+
+```json
+{
+  "username": "sanket_dev",
+  "email": "sanket@example.com",
+  "password": "example-password"
+}
+```
+
+| Field | Type | Required | Actual rules |
+|---|---|---|---|
+| username | String | Yes | Trimmed, 3–30 chars, letters/digits/underscore; schema requires, trims and declares unique |
+| email | String | Yes | Trimmed, valid email; schema requires, trims, lowercases and declares unique |
+| password | String | Yes | Non-empty, at least 6 chars; schema requires/minlength 6; pre-save hook hashes it |
+
+Success:
+- HTTP 201 outside production: `{ message, success: true, user: { id, username, email, verified: true } }`. Email is skipped.
+- HTTP 201 in production: `{ message: "Account created! Please verify your email to log in.", success: true, user: { id, username, email, verified: false } }` after mail delivery.
+
+Explicit errors:
+- 400 validation: `{ message: firstError.msg, success: false, errors: [...] }`.
+- 400 existing username/email: message says account already exists, `error: "User already exists"`.
+- 400 Mongo duplicate key: message names the duplicate field, `error: "Duplicate key"`.
+- 400 Mongoose validation: first schema message, `error: "Validation error"`.
+- 500 production email failure: controller deletes the new user and returns a rollback message; error may contain provider detail.
+- 500 other caught failure: generic registration message and error text.
+
+Execution:
+1. Express parses the body.
+2. Validator trims/checks username and email, checks the password, and returns 400 with the first message plus all validation errors when invalid.
+3. Controller queries for a matching username or email.
+4. Only `NODE_ENV === "production"` activates production verification.
+5. The controller creates a User. In non-production the account is auto-verified; in production it is unverified.
+6. The User model hashes a modified password with bcryptjs at 10 salt rounds.
+7. Non-production returns 201 without email.
+8. Production signs a verification JWT with user ID, builds a link from `PUBLIC_API_URL` or request origin, and calls Nodemailer.
+9. Mail failure triggers deletion of the created User; success returns 201.
+
+Side effects: User insert; production email attempt. Registration does not set the auth cookie. The email token has no explicit expiration configured in the signing call.
+
+### 4.4 POST /api/auth/login
+
+Body:
+
+```json
+{
+  "email": "sanket@example.com",
+  "password": "example-password"
+}
+```
+
+Email is required, trimmed and checked with `isEmail()`; password is required and non-empty.
+
+- HTTP 200: `{ message: "Login successful", success: true, user: { id, username, email, verified } }` and a `token` Set-Cookie header.
+- 400: validator envelope, account not found, wrong password, or unverified account.
+- 500: `{ message: "Login failed. Please try again.", success: false, error: ... }`.
+
+Execution:
+1. Validation middleware checks body.
+2. Controller finds User by email.
+3. `comparePassword()` runs `bcrypt.compare`; wrong password and unverified account are rejected.
+4. Controller signs `{ id, username }` with `JWT_SECRET`.
+5. Cookie is `httpOnly` with 7-day max age. For HTTPS, code sets `SameSite=None; Secure`; otherwise `SameSite=Lax`.
+6. Safe user summary is returned in JSON; JWT is not returned in the body.
+
+Important: the cookie is configured for seven days, but `jwt.sign()` does not set `expiresIn`. The JWT has no explicit expiry claim in this implementation.
+
+### 4.5 GET /api/auth/get-me
+
+Requires cookie `token`; no request body.
+
+- 200: `{ message: "User fetched successfully", success: true, user: <User document without password> }`.
+- 401: missing cookie returns `error: "No token provided"`; verification failure returns `error: "Invalid token"`.
+- 404: user no longer exists.
+- 500: profile lookup failure.
+
+Execution: `authUser` reads `req.cookies.token`, verifies it using `JWT_SECRET`, assigns decoded claims to `req.user`, then `getMe()` queries User by ID and excludes password.
+
+### 4.6 GET /api/auth/verify-email
+
+Input: query parameter `token` from the verification email.
+
+- Success: HTTP 200 HTML verification page.
+- 404: token decoded but the user record is missing.
+- 400: `{ message: "Invalid or expired token", success: false, error: "Invalid token" }` for exceptions inside the controller's try block.
+
+Flow: verify token, load User by decoded ID, set `verified = true`, save, then send HTML. Observations: the token has no explicit expiry; the success page hard-codes `http://localhost:5173/login`; the catch also maps database/save errors to the invalid-token response.
+
+### 4.7 POST /api/auth/logout
+
+Public route; body is not needed.
+
+- 200: `{ message: "Logout successful", success: true }`.
+- 500: logout failure envelope.
+
+It calls `res.clearCookie("token", { httpOnly: true, sameSite: "lax" })`. These clear attributes do not mirror login's HTTPS branch, which may use `SameSite=None; Secure`. Confirm deployed cookie deletion in browser.
+
+### 4.8 POST /api/chats/message
+
+Body:
+
+```json
+{
+  "message": "Explain how React state updates work.",
+  "chatID": "OPTIONAL_EXISTING_CHAT_ID",
+  "webSearch": false
+}
+```
+
+| Field | Type expected | Required | Actual validation |
+|---|---|---|---|
+| message | String | Yes | Controller only checks truthiness; no length/type schema |
+| chatID | ObjectId string | No | Missing/falsy creates a new chat; existing ID is not owner-checked |
+| webSearch | Boolean | No | Passed through; any truthy value activates search |
+
+- Success: HTTP 201 `{ title, chat, aiMessage }`. New chat returns title/document; existing-chat path returns null for both; aiMessage is the saved AI Message document.
+- 400: `{ error: "Message is required" }`.
+- 401: auth middleware.
+- 500: `{ error: error.message || "Failed to send message" }` for caught failures.
+
+Execution:
+1. Verify cookie and set `req.user`.
+2. Read message, chatID and webSearch; log a prompt prefix.
+3. Reject a falsy message.
+4. If chatID is absent, generate a title, create a Chat owned by `req.user.id`.
+5. Insert User Message with `parentMessage: null`.
+6. Query messages for the target chat; there is no explicit sort.
+7. Call `generateResponse(messages, webSearch)`.
+8. Insert AI Message with `parentMessage` set to the new user-message ID.
+9. Return title, chat and aiMessage.
+
+Persistence/failure details: chat and user prompt are stored before provider generation. Gemini failure leaves those writes in place; failure inserting the AI response can leave an unanswered user message. No transaction wraps this workflow. A supplied chatID is neither verified as existing nor checked against the logged-in owner before the message writes. This is a significant authorization/data-integrity risk in current code.
+
+### 4.9 POST /api/chats/generate-image
+
+Body:
+
+```json
+{
+  "prompt": "A blue glass city floating above the ocean",
+  "chatID": "OPTIONAL_EXISTING_CHAT_ID"
+}
+```
+
+- `prompt` is required only by a truthiness check.
+- `chatID` is optional; absent ID triggers title generation and new Chat creation.
+- Success: HTTP 201 `{ title, chat, aiMessage }`. AI message content is Markdown image syntax linking to an absolute URL.
+- 400: `{ error: "Prompt is required" }`.
+- 401: auth middleware.
+- 500: caught provider, filesystem or DB error.
+
+Execution:
+1. Verify token and check prompt.
+2. For a new chat, generate a title for the text “Generate image: prompt” and create the Chat.
+3. Insert the prompt as a User Message.
+4. Call `generateGrokImage(prompt)`. The name is misleading: the implementation uses Google GenAI and a Gemini image model.
+5. The image service writes to `process.cwd()/public/images` and returns a `/public/images/...` path.
+6. The controller builds an absolute URL from request protocol and host.
+7. Insert the AI Message with Markdown image syntax and the user's message ID as parent.
+8. Return HTTP 201.
+
+Side effects and failures: chat, messages and local image files can be partially created. Generation failure after prompt insertion leaves an unanswered prompt. Image-file writes before a later DB failure can leave orphaned files. Existing chat IDs are not owner-checked.
+
+### 4.10 GET /api/chats
+
+Requires auth cookie. No body or params.
+
+- 200: `{ message: "Chats retrieved successfully", chats: [ChatDocument, ...] }`.
+- 401: auth middleware.
+- 500: `{ error: "Failed to fetch chats" }`.
+
+Queries `Chat.find({ user: req.user.id })`. There is no explicit sort or pagination.
+
+### 4.11 GET /api/chats/:chatID/messages
+
+Requires auth cookie. `chatID` is the path parameter.
+
+- 200: `{ message: "Messages retrieved successfully", messages: [MessageDocument, ...] }`.
+- 401: auth middleware.
+- 404: `{ error: "Chat not found" }` for missing/unowned chat.
+- Invalid ObjectId/database errors are not caught locally and may use Express's default error handling.
+
+Flow: verify token, check Chat by ID and user ID, then query Messages by chat ID and return them without explicit sorting.
+
+### 4.12 DELETE /api/chats/:chatID
+
+Requires auth cookie.
+
+- 200: `{ message: "Chat deleted successfully" }`.
+- 404: `{ error: "Chat not found" }` if the owner-scoped Chat deletion finds nothing.
+- 401: auth middleware.
+- Other DB/cast errors propagate to default Express handling.
+
+Flow:
+1. Call `findOneAndDelete({ _id: chatID, user: req.user.id })`.
+2. Regardless of result, call `messageModel.deleteMany({ chat: chatID })`.
+3. Return 404 if no owned Chat was deleted; otherwise 200.
+
+**Critical authorization observation:** messages are deleted even when the Chat does not belong to the caller. A caller who supplies another user's chat ID can cause its messages to be deleted and receive 404. The two deletions are not transactional.
+
+### 4.13 DELETE /api/chats/:chatID/messages/:messageID
+
+Requires auth cookie.
+
+- 200: `{ message: "Message deleted successfully" }`.
+- 404: chat not found/unowned or message not found.
+- 401: auth middleware.
+- Other cast/DB errors propagate because the handler has no local try/catch.
+
+Flow:
+1. Verify Chat ownership with both chat ID and user ID.
+2. Delete the Message matching message ID and chat ID.
+3. If deleted message role is `user`, delete children with `parentMessage` equal to that user's message ID.
+4. Return 200.
+
+Deleting an AI message does not delete its user prompt. Prompt + child-response cleanup is not transactional.
+
+### 4.14 Static assets and unknown routes
+
+Static files are served from `path.join(process.cwd(), "public")` at URL prefix `/public`. Generated images are also written relative to `process.cwd()`; execution working directory therefore determines whether generated files land in the directory being served. Unknown application paths use Express's default 404 behavior; no catch-all JSON handler is registered.
+
+
+## 5. Authentication and account lifecycle
+
+### 5.1 Registration state machine
+
+```mermaid
+flowchart TD
+    A[POST register] --> B{Validation passes?}
+    B -- No --> C[400 validation envelope]
+    B -- Yes --> D{Account exists?}
+    D -- Yes --> E[400 duplicate account]
+    D -- No --> F[Create User and hash password]
+    F --> G{NODE_ENV is production?}
+    G -- No --> H[verified=true; return 201]
+    G -- Yes --> I[verified=false; sign verification token]
+    I --> J[Send Gmail OAuth2 email]
+    J -- Success --> K[Return 201; verification required]
+    J -- Failure --> L[Delete new user; return 500]
+```
+
+NODE_ENV !== "production" selects non-production behavior, including when NODE_ENV is unset. In that mode newly created users are verified immediately and no email is sent.
+
+### 5.2 Password handling
+
+The User model pre-save hook hashes any modified password using bcryptjs with 10 salt rounds. The comparePassword method calls bcrypt.compare. A password-reset route and password-change endpoint are not registered. Registration validation checks the password before the pre-save hook stores its hash.
+
+### 5.3 JWT cookie and middleware
+
+The login controller signs the payload containing id and username using JWT_SECRET, then stores it in the httpOnly cookie named token. The cookie max age is seven days; Secure and SameSite depend on how the request protocol is detected.
+
+The authUser middleware does not query MongoDB or check the current verified value. It verifies the JWT and assigns decoded claims to req.user. A deleted or unverified user whose token still verifies is not rejected by this middleware alone; protected controllers must still enforce resource ownership.
+
+**Expiry distinction:** no expiresIn is passed to jwt.sign. Browser cookie expiration is not the same as a JWT exp claim. The current signed token has no explicit expiry configured.
+
+### 5.4 Session restore and logout
+
+- Frontend App calls handleGetMe on mount.
+- Auth Redux state begins with user=null, loading=true and error=null.
+- Protected renders a spinner while loading, then redirects to /login when user is missing.
+- handleLogout calls the logout route and clears Redux user/chat state and currentChatId in a finally block, even if the request fails.
+- Logout clears the token cookie with httpOnly and SameSite=Lax. These options do not mirror login's HTTPS branch, which can set SameSite=None and Secure. Deployed cross-origin cookie clearing should be verified.
+
+### 5.5 Verification email
+
+The mail service creates a Nodemailer Gmail transporter at module import using GOOGLE_USER, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN. It invokes transporter.verify() and logs success/failure. sendEmail calls transporter.sendMail() and logs the returned details.
+
+Production registration places the verification JWT in an email URL. The HTML response after verification contains a hard-coded localhost login URL. The current username validator restricts characters to alphanumeric and underscore, but HTML template values should still be escaped as a general security practice.
+
+## 6. Chat and AI request lifecycle
+
+### 6.1 Text response sequence
+
+```mermaid
+sequenceDiagram
+    participant UI as Dashboard/useChat
+    participant API as POST /api/chats/message
+    participant DB as MongoDB
+    participant AI as ai.service
+    participant Tavily
+    participant Gemini as Google GenAI
+    UI->>API: message, chatID?, webSearch?
+    API->>API: authUser validates cookie
+    alt New chat
+      API->>AI: generateChatTitle(message)
+      AI->>Gemini: Generate title
+      Gemini-->>AI: Title text
+      API->>DB: Create Chat
+    end
+    API->>DB: Insert User Message
+    API->>DB: Read chat Messages
+    opt webSearch truthy
+      API->>Tavily: Search last user prompt
+      Tavily-->>AI: JSON results or handled failure text
+    end
+    API->>Gemini: Generate response from history and instruction
+    Gemini-->>API: Response text
+    API->>DB: Insert AI Message parented to prompt
+    API-->>UI: title, chat, aiMessage
+    UI->>UI: Update Redux messages
+```
+
+### 6.2 New chat title
+
+When chatID is falsy, sendMessage calls generateChatTitle(message) before creating a Chat. The title service asks Gemini for a concise 2–3 word title and trims response.text. If the provider status belongs to the configured transient set, title generation returns "New chat"; other errors throw and abort before the Chat is created.
+
+### 6.3 Conversation-history conversion
+
+The controller retrieves messages using messageModel.find({ chat: targetChatId }), then generateResponse maps each document:
+- role user becomes Gemini role user;
+- every non-user role becomes Gemini role model;
+- content becomes parts containing a text value.
+
+No explicit sort order or history truncation is added. The complete returned history is sent on every text request. Long conversations therefore increase prompt size, latency and provider usage. Stored image responses are Markdown strings and are also passed to the text model as history text.
+
+### 6.4 Standard response versus web-search mode
+
+In standard mode, the system instruction asks Gemini to answer directly without external tools.
+
+When webSearch is truthy:
+1. The service reverses the in-memory message array and finds the last item whose role is user.
+2. It calls searchInternet with that message's content.
+3. The Tavily wrapper requests at most five results with searchDepth set to advanced.
+4. The result object is serialized with JSON.stringify.
+5. That JSON is inserted into the Gemini system instruction, which asks the model to use it and acknowledge absent or inconclusive evidence.
+6. Gemini returns free-form response text.
+
+If Tavily throws, generateResponse catches the search exception and substitutes "No search results available (search failed)." Gemini is still called with the instruction asking it to disclose failed/inconclusive search.
+
+This is retrieval-augmented prompt context, not vector search. The Message schema does not store structured source/citation records; the frontend receives generated text.
+
+### 6.5 Gemini client and retry policy
+
+ai.service.js initializes GoogleGenAI only if GEMINI_API_KEY exists and logs a warning if it does not. The active text model constant is gemini-3.8-flash in the checked-in code.
+
+generateContentWithRetry(request, retries=3) retries only errors whose status is 429, 500, 502, 503 or 504. The initial attempt plus up to three retries are possible. Wait durations are 750ms, 1500ms and 3000ms before retry attempts.
+
+- generateChatTitle returns "New chat" for transient status codes recognized by its catch branch; non-transient errors are wrapped and thrown.
+- generateResponse wraps model failures as "Failed to generate response: ..." and does not generate a fallback answer when Gemini itself fails.
+- No server-side AI streaming, request cancellation, or provider call timeout is implemented in this service.
+
+## 7. Image generation lifecycle
+
+### 7.1 Actual provider
+
+The controller imports a function named generateGrokImage, but that function is not a Grok API integration. Backend/src/services/image.service.js uses Google's GoogleGenAI client with model gemini-3.1-flash-image and requests image response modality.
+
+### 7.2 Image generation and fallback
+
+```mermaid
+flowchart TD
+    A[Authenticated image request] --> B[Prompt truthiness check]
+    B --> C{chatID supplied?}
+    C -- No --> D[Generate title and create Chat]
+    C -- Yes --> E[Use supplied ID without owner check]
+    D --> F[Insert user prompt Message]
+    E --> F
+    F --> G[Call Gemini image model]
+    G --> H{Inline image bytes found?}
+    H -- Yes --> I[Decode base64]
+    H -- No/API error --> J[Create keyword LoremFlickr URL]
+    J --> K{Valid non-placeholder response?}
+    K -- Yes --> L[Use fetched bytes]
+    K -- No --> M[Fetch Picsum image]
+    I --> N[Write random .png file under public/images]
+    L --> N
+    M --> N
+    N --> O[Return /public/images path]
+    O --> P[Persist Markdown AI Message]
+    P --> Q[Return 201]
+```
+
+### 7.3 Fallback logic
+
+1. The service checks GEMINI_API_KEY; if missing, it throws immediately and does not use the remote-image fallbacks.
+2. It requests Gemini image generation.
+3. Provider exceptions are logged and trigger fallback; a response with no image part also falls back.
+4. It creates process.cwd()/public/images if absent.
+5. It creates a random filename from 16 cryptographic bytes and appends .png.
+6. It lowercases the prompt, strips punctuation and common generation words, selects up to three terms longer than two characters, and builds a LoremFlickr URL.
+7. It fetches a LoremFlickr 800×600 URL with those keywords and a random query value.
+8. It falls back to Picsum Photos at 800×600 when the request fails, is non-OK, redirects to defaultImage, has no buffer, or returns the known 126099-byte placeholder size.
+9. It writes the chosen bytes to disk and returns a path under /public/images.
+
+LoremFlickr and Picsum provide photographs/placeholders; they do not guarantee that the result matches the prompt and are not AI image generation. The code writes every returned byte sequence to a .png filename without transcoding, so the extension does not guarantee PNG encoding.
+
+### 7.4 Filesystem and failure paths
+
+Express serves files from process.cwd()/public; the generator also writes under process.cwd()/public/images. The process working directory therefore matters. If started from an unexpected directory, image writes may not land in the directory being served.
+
+Gemini image failure is caught so fallbacks can be attempted. Errors from Picsum, filesystem operations, or the outer service are rethrown with the prefix "Gemini Image Generation failed:". The controller returns 500. If the prompt Message was saved before an image failure, it remains. If a file is written but subsequent Message insertion fails, it can be orphaned.
+
+
+## 8. Data models and relationships
+
+All three Mongoose schemas enable timestamps, which add createdAt and updatedAt. ObjectId refs express logical relationships; no SQL-style foreign keys or schema-declared cascade deletes exist.
+
+### 8.1 User
+
+**Source:** Backend/src/models/user.model.js  
+**Model/collection convention:** User / users.
+
+| Field | Type | Required | Constraints/default | Lifecycle |
+|---|---|---|---|---|
+| _id | ObjectId | Generated | Mongoose ID | Document identity |
+| username | String | Yes | trim; unique | Registration validator restricts 3–30 letters/digits/underscore |
+| email | String | Yes | trim; lowercase; unique | Registration validator checks email syntax |
+| password | String | Yes | minlength 6 | Hashes modified password before save |
+| verified | Boolean | No | default false | Set true outside production; false until verification in production |
+| createdAt | Date | Generated | timestamps | Creation time |
+| updatedAt | Date | Generated | timestamps | Updated on save |
+
+Model behavior:
+- Pre-save hook hashes a modified password with bcryptjs and 10 salt rounds.
+- comparePassword(candidatePassword) returns bcrypt.compare(candidatePassword, this.password).
+
+Indexes/constraints: username and email declare unique: true, asking Mongoose/MongoDB to establish unique indexes when index creation is enabled. Unique is not itself a Mongoose validator; duplicate-key error code 11000 is handled in registration.
+
+Usage: register, login, get-me, verify-email and Backend/seed.js.
+
+Representative document (hash abbreviated):
+
+```json
+{
+  "_id": "USER_OBJECT_ID",
+  "username": "sanket_dev",
+  "email": "sanket@example.com",
+  "password": "<bcrypt-hash>",
+  "verified": true,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+### 8.2 Chat
+
+**Source:** Backend/src/models/chat.model.js  
+**Model/collection convention:** Chat / chats.
+
+| Field | Type | Required | Constraints/default |
+|---|---|---|---|
+| _id | ObjectId | Generated | Mongoose ID |
+| user | ObjectId referencing User | Yes | Owner |
+| title | String | No | Default New Chat; trimmed |
+| createdAt | Date | Generated | Timestamps |
+| updatedAt | Date | Generated | Timestamps |
+
+No explicit title length, per-user pagination index, compound index, or title uniqueness constraint is defined in the schema.
+
+Lifecycle: sendMessage and generateImage create Chats when chatID is falsy. getChats reads by owner. getMessages and deletion handlers apply owner checks on the Chat query, with the important exceptions that text/image writes do not validate supplied chat ownership and deleteChat deletes messages even if the owner-scoped Chat deletion fails.
+
+Representative document:
+
+```json
+{
+  "_id": "CHAT_OBJECT_ID",
+  "user": "USER_OBJECT_ID",
+  "title": "React State Updates",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+### 8.3 Message
+
+**Source:** Backend/src/models/message.model.js  
+**Model/collection convention:** Message / messages.
+
+| Field | Type | Required | Constraints/default |
+|---|---|---|---|
+| _id | ObjectId | Generated | Mongoose ID |
+| chat | ObjectId referencing Chat | Yes | Conversation ID |
+| content | String | Yes | Plain text, AI answer text or Markdown image string |
+| role | String | Yes | Enum: user or ai |
+| parentMessage | ObjectId referencing Message | No | Default null; AI answer points to its prompt |
+| createdAt | Date | Generated | Timestamps |
+| updatedAt | Date | Generated | Timestamps |
+
+No explicit message compound index, content-size limit, uniqueness constraint, or schema-level cascade is defined. The application manually deletes children when a user message is deleted.
+
+Representative AI message:
+
+```json
+{
+  "_id": "AI_MESSAGE_OBJECT_ID",
+  "chat": "CHAT_OBJECT_ID",
+  "content": "Here is a concise explanation...",
+  "role": "ai",
+  "parentMessage": "USER_MESSAGE_OBJECT_ID",
+  "createdAt": "2026-01-01T00:00:01.000Z",
+  "updatedAt": "2026-01-01T00:00:01.000Z"
+}
+```
+
+### 8.4 Relationships
+
+```mermaid
+erDiagram
+    USER ||--o{ CHAT : owns
+    CHAT ||--o{ MESSAGE : contains
+    MESSAGE o|--o{ MESSAGE : "parentMessage links reply to prompt"
+```
+
+Intended relationship: one User owns many Chats; a Chat contains many Messages; an AI Message links to the corresponding user prompt through parentMessage. The relationship is used by deleteMessage, but no DB-level cascade or transaction enforces it.
+
+### 8.5 Ordering, indexes and transactions
+
+The controllers don't explicitly sort messages or chats and don't paginate results. The full message history is loaded for each response. No MongoDB session or transaction is used around multi-document create/delete flows. The only explicitly declared uniqueness constraints are on User username and email.
+
+## 9. Frontend state and UI flows
+
+### 9.1 Redux structure
+
+The store registers auth and chat slices.
+
+Auth state:
+```js
+{
+  user: null,
+  loading: true,
+  error: null
+}
+```
+
+Chat state:
+```js
+{
+  chats: {},
+  currentChatId: "read from Local Storage or null",
+  isLoading: false,
+  error: null
+}
+```
+
+The chats object is keyed by chat ID. Loaded messages are commonly normalized to objects with role, content and id. The only slice-level persistence is currentChatId in browser Local Storage; the full chat map and messages are not persisted there.
+
+### 9.2 Session restoration
+
+1. App invokes handleGetMe on mount.
+2. Axios requests GET /api/auth/get-me with credentials.
+3. On success, auth state stores the returned user.
+4. On HTTP 401, handleGetMe suppresses a user-facing error; other errors set auth.error.
+5. Its finally block sets loading false.
+6. Protected keeps the page in a loading state until then; without a user it navigates to /login.
+7. Login success stores user in Redux and navigates to /.
+8. Logout calls backend and clears Redux state and Local Storage selection in a finally block, even if the server call fails.
+
+### 9.3 Chat list and message loading
+
+Dashboard mount calls initializeSocketConnection and handleGetChats.
+
+1. handleGetChats retrieves the user's Chat documents.
+2. The hook maps each document to an object keyed by MongoDB _id, with id, title, an empty messages array and updatedAt as lastUpdated.
+3. setChats replaces the chat map while preserving any existing non-empty message arrays for matching IDs.
+4. If the persisted currentChatId no longer exists in the newly loaded map, the hook clears it.
+5. When a selected ID exists in chatsMap, an effect calls loadMessages.
+6. loadMessages retrieves all Messages and maps each document to role, content and id before updating Redux.
+
+Local Storage is origin-specific. A selected chat saved on localhost doesn't automatically apply to the deployed site.
+
+### 9.4 Sending a text or image request
+
+1. Dashboard prevents form submission and trims chatInput.
+2. Empty input returns without a request.
+3. If image mode is active, it calls handleGenerateImage; otherwise it calls handleSendMessage with the webSearch flag.
+4. The hook sets isLoading true.
+5. It uses a chat ID only when the ID exists in the current Redux chat map; an absent or unrecognized ID is sent as null to create a new chat.
+6. It awaits the respective Axios API wrapper.
+7. For a new conversation, it dispatches createNewChat with returned ID/title.
+8. It appends the user prompt and AI response to the in-memory Redux chat entry.
+9. It returns true on success or false on failure; the input draft is cleared only when the returned promise resolves to true.
+10. isLoading is reset in finally. Errors are logged and stored in chat.error.
+
+Image mode is set false immediately after starting the async action, not after generation completes. The form keeps failed/slow message text so the user can retry.
+
+### 9.5 Web search and image mode
+
+- Search toggles local webSearch state and sends it with POST /api/chats/message. It is hidden while image mode is active.
+- Image mode switches form behavior to POST /api/chats/generate-image.
+- Quick prompts prefill the input and may turn on image/search mode.
+- The paperclip is visible but has no click handler or file-input/upload behavior.
+- Image responses are Markdown image strings and rendered with ReactMarkdown; the frontend doesn't upload image files.
+
+### 9.6 Rendering and chat management
+
+AI messages use ReactMarkdown with remark-gfm. Code fences with a language class are rendered by react-syntax-highlighter, with a theme selected from light/dark state. User messages use a simple line-by-line renderer recognizing heading markers, basic bullet prefixes and bold markers; that function isn't a complete Markdown parser.
+
+Sidebar search filters already-loaded chats by title locally. Selecting a chat dispatches setCurrentChatId and triggers message loading. Delete-chat invokes the delete endpoint then reloads the chat list; delete-message invokes its endpoint and reloads that chat's messages.
+
+### 9.7 UI controls with no implemented action
+
+The profile menu renders Edit Profile, Settings, Upgrade Plan and Help buttons without handlers. The share/options/model-selector header section is commented out. The theme toggle and sidebar collapse are component-local state and reset on reload. Several imported icons in Dashboard are unused in the current file. The loading indicator inside the message list is commented out even though Redux isLoading is maintained.
+
+
+
+## 10. Socket.IO behavior
+
+### Server
+
+Backend/src/sockets/server.socket.js attaches a Socket.IO server to the Node HTTP server and configures CORS with the same hard-coded origins as the Express app. It registers only:
+- connection: log the socket ID;
+- disconnect: log the socket ID.
+
+No other server-side socket events are registered. The server does not subscribe clients to chat rooms, validate chat message payloads, emit AI chunks, implement acknowledgements, authenticate a socket handshake, or use retry queues/dead-letter handling.
+
+### Client
+
+frontend/src/features/chats/services/chat.socket.js creates a socket connection with credentials and logs connect/disconnect events. Dashboard invokes initializeSocketConnection on mount but does not retain the returned socket in component state/ref, register app-level message listeners, or disconnect it in an effect cleanup.
+
+### Current limitation
+
+The socket module has a module-scoped variable named io, but initSocket declares a local const io, shadowing that variable. getIO checks the still-undefined module variable and throws "Socket.io not initialized" if called. No active code currently calls getIO, so this defect does not affect the present connection/disconnection logging behavior.
+
+Socket.IO currently supplies connection infrastructure only. Text/image responses are returned by REST after their generation work completes; there is no streaming implementation.
+
+## 11. External services and dependencies
+
+### 11.1 Provider integrations
+
+| Integration | Entry point | Purpose | Failure behavior |
+|---|---|---|---|
+| Google GenAI text/title | Backend/src/services/ai.service.js | Chat title and AI response generation | Retry configured transient HTTP statuses; then throw, except title fallback |
+| Google GenAI image | Backend/src/services/image.service.js | Image response generation using Gemini image model | Provider error triggers remote-image fallback |
+| Tavily | Backend/src/services/internet.service.js | Up to five advanced-search results in web-search mode | Caller catches search error and continues with a failure note in prompt |
+| LoremFlickr | Backend/src/services/image.service.js | Keyword image fallback | Picsum used if failed/placeholder detected |
+| Picsum Photos | Backend/src/services/image.service.js | Final remote-image fallback | Failure propagates to image endpoint |
+| Nodemailer/Gmail OAuth2 | Backend/src/services/mail.service.js | Verification email in production | Registration deletes the new user if sendEmail rejects |
+| MongoDB | Models and config/database.js | Durable User, Chat and Message persistence | Controller-dependent error handling |
+| Static file server | Express /public mount | Serves generated images and public files | Depends on working directory and filesystem permissions |
+
+### 11.2 Backend dependencies
+
+Declared in Backend/package.json:
+
+| Package | Observed role |
+|---|---|
+| express | HTTP app and routing |
+| mongoose, mongodb | Database ODM/client dependencies |
+| jsonwebtoken | Auth and verification tokens |
+| bcryptjs | Password hashing/comparison |
+| cookie-parser | Populate request cookies |
+| cors | HTTP CORS allowlist |
+| morgan | HTTP request logging using dev format |
+| express-validator | Register/login input validation |
+| @google/genai | Gemini text/title/image requests |
+| @tavily/core | Web search |
+| nodemailer | Gmail OAuth2 mail |
+| dotenv | Load environment configuration |
+| socket.io | Socket server |
+| @langchain/google-genai, @langchain/mistralai, langchain, zod | Declared dependencies; not used by the active application request path described above. LangChain is imported by the manual test script. |
+| init | Declared package; no active app import identified |
+
+Backend's dev command invokes npx nodemon server.js, but Nodemon is not directly declared in the shown dependency list. There is no dedicated production start script.
+
+### 11.3 Frontend dependencies
+
+| Package | Role |
+|---|---|
+| react, react-dom | UI components and rendering |
+| react-router, react-router-dom | Route definition and navigation |
+| @reduxjs/toolkit, react-redux | Shared authentication/chat state |
+| axios | REST requests with credentials and timeout |
+| socket.io-client | Socket connection lifecycle |
+| react-markdown, remark-gfm | AI Markdown/GFM rendering |
+| react-syntax-highlighter | Highlighted code fences |
+| lucide-react | Interface icons |
+| sass, tailwindcss, @tailwindcss/vite | Styling pipeline |
+| vite, @vitejs/plugin-react, ESLint plugins | Build, development and lint tooling |
+
+Package ranges are declared in the respective package.json files; lockfiles record exact resolutions. The repository has no integration test runner configured for the app's routes/providers.
+
+### 11.4 CORS and cross-origin cookies
+
+Backend/src/app.js and server.socket.js hard-code allowed origins, including localhost:5173 and two Render deployment origins. If frontend/backend hosts change, CORS and VITE_API_URL must stay aligned.
+
+Cookie-based cross-origin requests need:
+- frontend Axios withCredentials enabled;
+- backend CORS credentials enabled;
+- a specific allowed origin rather than wildcard;
+- compatible SameSite/Secure attributes;
+- correct HTTPS protocol detection behind the reverse proxy.
+
+The allowlist is not loaded dynamically from environment variables.
+
+## 12. Security and failure observations
+
+These are code-based risks and implementation observations, not reports of confirmed production incidents.
+
+### Authorization and consistency
+
+1. **Text/image writes do not verify existing chat ownership.** sendMessage and generateImage accept a chatID and create messages against it without confirming that the Chat belongs to req.user.id. A user who obtains another user's chat ID could potentially append messages to it.
+2. **deleteChat deletes messages even when owner-scoped chat deletion fails.** It calls deleteMany using chatID before checking whether the user-owned Chat query found a document. A request involving another user's chat ID can delete that chat's messages and still return 404.
+3. **Multi-document workflows are not transactional.** Chat/message writes or deletion/cascade steps can partially persist when a later step fails.
+4. **JWT has no explicit expiry claim.** A seven-day cookie lifetime does not enforce server-side JWT expiry once a token is otherwise available.
+5. **Logout cookie attributes can differ from login.** The clearCookie options do not mirror the HTTPS login branch; test production logout.
+6. **Email HTML is built through string interpolation.** Current username validation restricts characters, but interpolated values should be HTML-escaped.
+
+### Reliability and operations
+
+7. **MongoDB is not a startup gate.** The listener starts before the database connection resolves; connection failure is logged but doesn't stop listening.
+8. **Some controllers lack local try/catch.** Message retrieval and deletion cast/database failures may use default Express error handling and a different response body.
+9. **Error response shape is inconsistent.** Auth validation, chat validation, provider failures and default Express errors use different envelopes.
+10. **No rate limiter is registered.** Provider-spending and authentication endpoints lack application-level rate-limit middleware in the inspected route chain.
+11. **No message pagination/context cap.** Every response loads and sends all stored messages; long conversations can grow in request latency and provider cost.
+12. **No generated-image cleanup policy.** Files can accumulate or become orphaned after a later database failure.
+13. **File extension is not normalized.** Fallback bytes are stored with a .png suffix without image transcoding.
+14. **CORS is hard-coded.** Backend and Socket.IO allowlists can diverge from deployment settings.
+15. **Socket IO reference shadowing.** getIO throws if called because module-scoped io is never assigned.
+16. **Logs can contain user content.** Chat controller logs prompt prefixes and a message query result; Morgan logs HTTP requests.
+17. **Seed script deletes a known test user first.** Backend/seed.js deletes test@example.com before creating a verified test account. Only run it when that destructive behavior is intentional.
+18. **Frontend socket cleanup is absent.** Dashboard discards the returned Socket.IO object and has no disconnect cleanup in its effect.
+19. **No CSRF token scheme is implemented.** SameSite cookie policy provides some browser-level mitigation, but this app has no explicit CSRF token middleware in the inspected code.
+
+## 13. Operations and troubleshooting
+
+### 13.1 Local development
+
+Install dependencies independently:
+
+```bash
+cd Backend
+npm install
+```
+
+Set required backend environment values locally. For the existing Vite proxy configuration, the backend should listen on port 3000.
+
+Start the backend:
+
+```bash
+cd Backend
+npm run dev
+```
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local Vite URL printed by the command; the frontend config fixes it to port 5173. If VITE_API_URL points to a deployed server, requests use that host instead of the relative /api proxy path.
+
+### 13.2 Production verification
+
+```bash
+cd frontend
+npm run lint
+npm run build
+npm run preview
+```
+
+Backend npm test is a placeholder that exits non-zero. Manual provider probes exist in test_gemini.js, test_gemini_history.js, test_langchain.js and test-oauth.js. They require the appropriate environment values and do not validate the full API integration.
+
+### 13.3 Troubleshooting matrix
+
+| Symptom | Checks grounded in current code |
+|---|---|
+| API calls fail locally | Compare Backend PORT default 8000 against Vite proxy target 3000 |
+| MongoDB calls fail after server starts | Check MONGODB_URI and confirm the connection log; HTTP listener starts even if DB connect fails |
+| Protected requests return 401 | Confirm token cookie exists, Axios sends credentials, CORS origin matches, and SameSite/Secure settings match deployment |
+| Login works locally but cookie fails on hosted site | Verify allowed origin, HTTPS detection via reverse proxy, and browser third-party cookie policy |
+| Production registration returns 500 | Check Gmail OAuth2 vars and transporter.verify log; registration rolls back User if sendEmail rejects |
+| Web search seems to work without results | Tavily errors are caught; Gemini still gets a search-failed note and may answer from model knowledge |
+| Image generation returns 500 | Check GEMINI_API_KEY, provider quota, LoremFlickr/Picsum requests, filesystem permissions and process working directory |
+| Generated image URL returns 404 | Confirm image writes and Express static root use the expected process.cwd() directory |
+| Verification success page points locally | The current HTML response hard-codes localhost:5173/login |
+| No live typing/streaming appears | Socket server has no AI chunk events; REST waits for full generation |
+| Sidebar remembers old or wrong chat | currentChatId is Local Storage state scoped to the current origin; it is reconciled against GET /api/chats on dashboard load |
+
+### 13.4 Environment hygiene
+
+- Never commit provider API keys, database passwords, JWT secrets or OAuth refresh tokens.
+- VITE_ variables are included in browser-facing frontend configuration; do not put private credentials in them.
+- The repository tracks frontend/.env with VITE_API_URL; this reference deliberately omits its value.
+- There is no Backend .env.example in the inspected tree. If adding one later, include placeholder values only and keep real environment files ignored.
+
+## 14. File-level traceability
+
+| Behavior | Source path |
+|---|---|
+| HTTP process/startup | Backend/server.js |
+| Middleware, CORS, static files, router mounts | Backend/src/app.js |
+| Mongo connection | Backend/src/config/database.js |
+| Auth routes | Backend/src/routes/auth.route.js |
+| Chat routes | Backend/src/routes/chats.route.js |
+| JWT cookie middleware | Backend/src/middlewares/auth.middleware.js |
+| Registration/login validation | Backend/src/validators/auth.validator.js |
+| Auth controllers | Backend/src/controllers/auth.controller.js |
+| Chat/image/message controllers | Backend/src/controllers/chat.controller.js |
+| Password hash/compare | Backend/src/models/user.model.js |
+| Chat schema | Backend/src/models/chat.model.js |
+| Message schema/parent relation | Backend/src/models/message.model.js |
+| Title/response/retry logic | Backend/src/services/ai.service.js |
+| Tavily call | Backend/src/services/internet.service.js |
+| Gemini image/fallback pipeline | Backend/src/services/image.service.js |
+| Gmail transporter | Backend/src/services/mail.service.js |
+| Socket events | Backend/src/sockets/server.socket.js |
+| React bootstrap/store/router | frontend/src/main.jsx, frontend/src/app/App.jsx, app.store.js, app.routes.jsx |
+| Auth client flow | frontend/src/features/auth/hooks/useAuth.js and services/auth.api.js |
+| Chat API orchestration | frontend/src/features/chats/hooks/useChat.jsx and services/chat.api.js |
+| Dashboard interactions/rendering | frontend/src/features/chats/pages/Dashboard.jsx |
+| Socket client | frontend/src/features/chats/services/chat.socket.js |
+| API base/credentials/timeout | frontend/src/api.js and frontend/vite.config.js |
+| Build/lint commands | Backend/package.json and frontend/package.json |
+
+### Verification boundary
+
+This reference follows static inspection of the recursive main-branch repository tree and its active backend/frontend paths, models, routes, controllers, services, socket handlers, configuration and styling. No live provider calls, browser integration tests, MongoDB test run or production deployment verification was performed during documentation. External-service behavior and source-based risks are labelled accordingly.
