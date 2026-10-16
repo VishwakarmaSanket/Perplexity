@@ -855,3 +855,219 @@ Sidebar search filters already-loaded chats by title locally. Selecting a chat d
 
 The profile menu renders Edit Profile, Settings, Upgrade Plan and Help buttons without handlers. The share/options/model-selector header section is commented out. The theme toggle and sidebar collapse are component-local state and reset on reload. Several imported icons in Dashboard are unused in the current file. The loading indicator inside the message list is commented out even though Redux isLoading is maintained.
 
+
+
+## 10. Socket.IO behavior
+
+### Server
+
+Backend/src/sockets/server.socket.js attaches a Socket.IO server to the Node HTTP server and configures CORS with the same hard-coded origins as the Express app. It registers only:
+- connection: log the socket ID;
+- disconnect: log the socket ID.
+
+No other server-side socket events are registered. The server does not subscribe clients to chat rooms, validate chat message payloads, emit AI chunks, implement acknowledgements, authenticate a socket handshake, or use retry queues/dead-letter handling.
+
+### Client
+
+frontend/src/features/chats/services/chat.socket.js creates a socket connection with credentials and logs connect/disconnect events. Dashboard invokes initializeSocketConnection on mount but does not retain the returned socket in component state/ref, register app-level message listeners, or disconnect it in an effect cleanup.
+
+### Current limitation
+
+The socket module has a module-scoped variable named io, but initSocket declares a local const io, shadowing that variable. getIO checks the still-undefined module variable and throws "Socket.io not initialized" if called. No active code currently calls getIO, so this defect does not affect the present connection/disconnection logging behavior.
+
+Socket.IO currently supplies connection infrastructure only. Text/image responses are returned by REST after their generation work completes; there is no streaming implementation.
+
+## 11. External services and dependencies
+
+### 11.1 Provider integrations
+
+| Integration | Entry point | Purpose | Failure behavior |
+|---|---|---|---|
+| Google GenAI text/title | Backend/src/services/ai.service.js | Chat title and AI response generation | Retry configured transient HTTP statuses; then throw, except title fallback |
+| Google GenAI image | Backend/src/services/image.service.js | Image response generation using Gemini image model | Provider error triggers remote-image fallback |
+| Tavily | Backend/src/services/internet.service.js | Up to five advanced-search results in web-search mode | Caller catches search error and continues with a failure note in prompt |
+| LoremFlickr | Backend/src/services/image.service.js | Keyword image fallback | Picsum used if failed/placeholder detected |
+| Picsum Photos | Backend/src/services/image.service.js | Final remote-image fallback | Failure propagates to image endpoint |
+| Nodemailer/Gmail OAuth2 | Backend/src/services/mail.service.js | Verification email in production | Registration deletes the new user if sendEmail rejects |
+| MongoDB | Models and config/database.js | Durable User, Chat and Message persistence | Controller-dependent error handling |
+| Static file server | Express /public mount | Serves generated images and public files | Depends on working directory and filesystem permissions |
+
+### 11.2 Backend dependencies
+
+Declared in Backend/package.json:
+
+| Package | Observed role |
+|---|---|
+| express | HTTP app and routing |
+| mongoose, mongodb | Database ODM/client dependencies |
+| jsonwebtoken | Auth and verification tokens |
+| bcryptjs | Password hashing/comparison |
+| cookie-parser | Populate request cookies |
+| cors | HTTP CORS allowlist |
+| morgan | HTTP request logging using dev format |
+| express-validator | Register/login input validation |
+| @google/genai | Gemini text/title/image requests |
+| @tavily/core | Web search |
+| nodemailer | Gmail OAuth2 mail |
+| dotenv | Load environment configuration |
+| socket.io | Socket server |
+| @langchain/google-genai, @langchain/mistralai, langchain, zod | Declared dependencies; not used by the active application request path described above. LangChain is imported by the manual test script. |
+| init | Declared package; no active app import identified |
+
+Backend's dev command invokes npx nodemon server.js, but Nodemon is not directly declared in the shown dependency list. There is no dedicated production start script.
+
+### 11.3 Frontend dependencies
+
+| Package | Role |
+|---|---|
+| react, react-dom | UI components and rendering |
+| react-router, react-router-dom | Route definition and navigation |
+| @reduxjs/toolkit, react-redux | Shared authentication/chat state |
+| axios | REST requests with credentials and timeout |
+| socket.io-client | Socket connection lifecycle |
+| react-markdown, remark-gfm | AI Markdown/GFM rendering |
+| react-syntax-highlighter | Highlighted code fences |
+| lucide-react | Interface icons |
+| sass, tailwindcss, @tailwindcss/vite | Styling pipeline |
+| vite, @vitejs/plugin-react, ESLint plugins | Build, development and lint tooling |
+
+Package ranges are declared in the respective package.json files; lockfiles record exact resolutions. The repository has no integration test runner configured for the app's routes/providers.
+
+### 11.4 CORS and cross-origin cookies
+
+Backend/src/app.js and server.socket.js hard-code allowed origins, including localhost:5173 and two Render deployment origins. If frontend/backend hosts change, CORS and VITE_API_URL must stay aligned.
+
+Cookie-based cross-origin requests need:
+- frontend Axios withCredentials enabled;
+- backend CORS credentials enabled;
+- a specific allowed origin rather than wildcard;
+- compatible SameSite/Secure attributes;
+- correct HTTPS protocol detection behind the reverse proxy.
+
+The allowlist is not loaded dynamically from environment variables.
+
+## 12. Security and failure observations
+
+These are code-based risks and implementation observations, not reports of confirmed production incidents.
+
+### Authorization and consistency
+
+1. **Text/image writes do not verify existing chat ownership.** sendMessage and generateImage accept a chatID and create messages against it without confirming that the Chat belongs to req.user.id. A user who obtains another user's chat ID could potentially append messages to it.
+2. **deleteChat deletes messages even when owner-scoped chat deletion fails.** It calls deleteMany using chatID before checking whether the user-owned Chat query found a document. A request involving another user's chat ID can delete that chat's messages and still return 404.
+3. **Multi-document workflows are not transactional.** Chat/message writes or deletion/cascade steps can partially persist when a later step fails.
+4. **JWT has no explicit expiry claim.** A seven-day cookie lifetime does not enforce server-side JWT expiry once a token is otherwise available.
+5. **Logout cookie attributes can differ from login.** The clearCookie options do not mirror the HTTPS login branch; test production logout.
+6. **Email HTML is built through string interpolation.** Current username validation restricts characters, but interpolated values should be HTML-escaped.
+
+### Reliability and operations
+
+7. **MongoDB is not a startup gate.** The listener starts before the database connection resolves; connection failure is logged but doesn't stop listening.
+8. **Some controllers lack local try/catch.** Message retrieval and deletion cast/database failures may use default Express error handling and a different response body.
+9. **Error response shape is inconsistent.** Auth validation, chat validation, provider failures and default Express errors use different envelopes.
+10. **No rate limiter is registered.** Provider-spending and authentication endpoints lack application-level rate-limit middleware in the inspected route chain.
+11. **No message pagination/context cap.** Every response loads and sends all stored messages; long conversations can grow in request latency and provider cost.
+12. **No generated-image cleanup policy.** Files can accumulate or become orphaned after a later database failure.
+13. **File extension is not normalized.** Fallback bytes are stored with a .png suffix without image transcoding.
+14. **CORS is hard-coded.** Backend and Socket.IO allowlists can diverge from deployment settings.
+15. **Socket IO reference shadowing.** getIO throws if called because module-scoped io is never assigned.
+16. **Logs can contain user content.** Chat controller logs prompt prefixes and a message query result; Morgan logs HTTP requests.
+17. **Seed script deletes a known test user first.** Backend/seed.js deletes test@example.com before creating a verified test account. Only run it when that destructive behavior is intentional.
+18. **Frontend socket cleanup is absent.** Dashboard discards the returned Socket.IO object and has no disconnect cleanup in its effect.
+19. **No CSRF token scheme is implemented.** SameSite cookie policy provides some browser-level mitigation, but this app has no explicit CSRF token middleware in the inspected code.
+
+## 13. Operations and troubleshooting
+
+### 13.1 Local development
+
+Install dependencies independently:
+
+```bash
+cd Backend
+npm install
+```
+
+Set required backend environment values locally. For the existing Vite proxy configuration, the backend should listen on port 3000.
+
+Start the backend:
+
+```bash
+cd Backend
+npm run dev
+```
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local Vite URL printed by the command; the frontend config fixes it to port 5173. If VITE_API_URL points to a deployed server, requests use that host instead of the relative /api proxy path.
+
+### 13.2 Production verification
+
+```bash
+cd frontend
+npm run lint
+npm run build
+npm run preview
+```
+
+Backend npm test is a placeholder that exits non-zero. Manual provider probes exist in test_gemini.js, test_gemini_history.js, test_langchain.js and test-oauth.js. They require the appropriate environment values and do not validate the full API integration.
+
+### 13.3 Troubleshooting matrix
+
+| Symptom | Checks grounded in current code |
+|---|---|
+| API calls fail locally | Compare Backend PORT default 8000 against Vite proxy target 3000 |
+| MongoDB calls fail after server starts | Check MONGODB_URI and confirm the connection log; HTTP listener starts even if DB connect fails |
+| Protected requests return 401 | Confirm token cookie exists, Axios sends credentials, CORS origin matches, and SameSite/Secure settings match deployment |
+| Login works locally but cookie fails on hosted site | Verify allowed origin, HTTPS detection via reverse proxy, and browser third-party cookie policy |
+| Production registration returns 500 | Check Gmail OAuth2 vars and transporter.verify log; registration rolls back User if sendEmail rejects |
+| Web search seems to work without results | Tavily errors are caught; Gemini still gets a search-failed note and may answer from model knowledge |
+| Image generation returns 500 | Check GEMINI_API_KEY, provider quota, LoremFlickr/Picsum requests, filesystem permissions and process working directory |
+| Generated image URL returns 404 | Confirm image writes and Express static root use the expected process.cwd() directory |
+| Verification success page points locally | The current HTML response hard-codes localhost:5173/login |
+| No live typing/streaming appears | Socket server has no AI chunk events; REST waits for full generation |
+| Sidebar remembers old or wrong chat | currentChatId is Local Storage state scoped to the current origin; it is reconciled against GET /api/chats on dashboard load |
+
+### 13.4 Environment hygiene
+
+- Never commit provider API keys, database passwords, JWT secrets or OAuth refresh tokens.
+- VITE_ variables are included in browser-facing frontend configuration; do not put private credentials in them.
+- The repository tracks frontend/.env with VITE_API_URL; this reference deliberately omits its value.
+- There is no Backend .env.example in the inspected tree. If adding one later, include placeholder values only and keep real environment files ignored.
+
+## 14. File-level traceability
+
+| Behavior | Source path |
+|---|---|
+| HTTP process/startup | Backend/server.js |
+| Middleware, CORS, static files, router mounts | Backend/src/app.js |
+| Mongo connection | Backend/src/config/database.js |
+| Auth routes | Backend/src/routes/auth.route.js |
+| Chat routes | Backend/src/routes/chats.route.js |
+| JWT cookie middleware | Backend/src/middlewares/auth.middleware.js |
+| Registration/login validation | Backend/src/validators/auth.validator.js |
+| Auth controllers | Backend/src/controllers/auth.controller.js |
+| Chat/image/message controllers | Backend/src/controllers/chat.controller.js |
+| Password hash/compare | Backend/src/models/user.model.js |
+| Chat schema | Backend/src/models/chat.model.js |
+| Message schema/parent relation | Backend/src/models/message.model.js |
+| Title/response/retry logic | Backend/src/services/ai.service.js |
+| Tavily call | Backend/src/services/internet.service.js |
+| Gemini image/fallback pipeline | Backend/src/services/image.service.js |
+| Gmail transporter | Backend/src/services/mail.service.js |
+| Socket events | Backend/src/sockets/server.socket.js |
+| React bootstrap/store/router | frontend/src/main.jsx, frontend/src/app/App.jsx, app.store.js, app.routes.jsx |
+| Auth client flow | frontend/src/features/auth/hooks/useAuth.js and services/auth.api.js |
+| Chat API orchestration | frontend/src/features/chats/hooks/useChat.jsx and services/chat.api.js |
+| Dashboard interactions/rendering | frontend/src/features/chats/pages/Dashboard.jsx |
+| Socket client | frontend/src/features/chats/services/chat.socket.js |
+| API base/credentials/timeout | frontend/src/api.js and frontend/vite.config.js |
+| Build/lint commands | Backend/package.json and frontend/package.json |
+
+### Verification boundary
+
+This reference follows static inspection of the recursive main-branch repository tree and its active backend/frontend paths, models, routes, controllers, services, socket handlers, configuration and styling. No live provider calls, browser integration tests, MongoDB test run or production deployment verification was performed during documentation. External-service behavior and source-based risks are labelled accordingly.
