@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -24,13 +24,11 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PenLine,
-  Pin,
   MessageCircle,
-  Library,
+  ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import { setCurrentChatId, setError } from "../chat.slice";
-const LogoImage = "/assets/AI_Logo.png";
-const LogoImageLight = "/assets/AI_Logo_Light.png";
 
 const Dashboard = () => {
   const chat = useChat();
@@ -47,6 +45,7 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [pendingRequest, setPendingRequest] = useState(null);
+  const messagesEndRef = useRef(null);
 
   const chatsMap = useSelector((state) => state.chat.chats);
   const chatsList = Object.values(chatsMap);
@@ -142,9 +141,19 @@ const Dashboard = () => {
   const currentMessages = currentChatId
     ? chatsMap[currentChatId]?.messages || []
     : [];
-  const showPendingRequest =
-    pendingRequest && pendingRequest.chatId === currentChatId;
-  const hasMessages = currentMessages.length > 0 || Boolean(showPendingRequest);
+  const activeChatTitle = currentChatId
+    ? chatsMap[currentChatId]?.title || "New chat"
+    : "New chat";
+  const activePendingRequest =
+    pendingRequest && pendingRequest.chatId === currentChatId
+      ? pendingRequest
+      : null;
+  const hasPendingRequest = Boolean(activePendingRequest);
+  const hasMessages = currentMessages.length > 0 || hasPendingRequest;
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [currentChatId, currentMessages.length, hasPendingRequest]);
 
   const handleStartNewChat = () => {
     dispatch(setCurrentChatId(null));
@@ -184,6 +193,8 @@ const Dashboard = () => {
           type="text"
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
+          aria-label="Message"
+          autoComplete="off"
           placeholder={
             isImageMode
               ? "Describe the image you want to generate..."
@@ -224,20 +235,13 @@ const Dashboard = () => {
         className={`sidebar ${isSidebarOpen ? "" : "sidebar--collapsed"}`}
       >
         <div className="sidebar__top">
-          <div className="sidebar__logo">
-            <img
-              src={isLightMode ? LogoImageLight : LogoImage}
-              alt="Perplexity Logo"
-              className="sidebar__logoImage"
-            />
-          </div>
           <h1 className="sidebar__appName">Perplexity</h1>
           <button
             onClick={() => setIsSidebarOpen((previous) => !previous)}
             className="sidebar__collapseButton"
             title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
-            {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+            {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
           </button>
         </div>
 
@@ -249,7 +253,7 @@ const Dashboard = () => {
               title="New chat"
               aria-label="New chat"
             >
-              <PenLine size={20} />
+              <PenLine size={18} />
             </button>
             <button
               type="button"
@@ -257,7 +261,7 @@ const Dashboard = () => {
               title="Search chats"
               aria-label="Search chats"
             >
-              <Search size={21} />
+              <Search size={18} />
             </button>
             <button
               type="button"
@@ -265,23 +269,7 @@ const Dashboard = () => {
               title="Open chat history"
               aria-label="Open chat history"
             >
-              <Pin size={20} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen(true)}
-              title="Open conversations"
-              aria-label="Open conversations"
-            >
-              <MessageCircle size={20} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen(true)}
-              title="Open library"
-              aria-label="Open library"
-            >
-              <Library size={21} />
+              <MessageCircle size={18} />
             </button>
           </nav>
         )}
@@ -293,13 +281,13 @@ const Dashboard = () => {
             title="Start a new chat"
           >
             <div className="sidebar__cardIcon">
-              <Plus size={16} />
+              <Plus size={15} />
             </div>
             <span className="sidebar__cardText">New Chat</span>
           </button>
 
           <div className="sidebar__searchWrapper">
-            <Search size={15} className="sidebar__searchIcon" />
+            <Search size={14} className="sidebar__searchIcon" />
             <input
               type="text"
               placeholder="Search chats..."
@@ -360,7 +348,7 @@ const Dashboard = () => {
             className="sidebar__themeButton"
             onClick={() => setIsLightMode((prev) => !prev)}
           >
-            {isLightMode ? <Moon size={14} /> : <Sun size={14} />}
+            {isLightMode ? <Moon size={13} /> : <Sun size={13} />}
             <span>{isLightMode ? "Dark Mode" : "Light Mode"}</span>
           </button>
         </div>
@@ -381,7 +369,7 @@ const Dashboard = () => {
               onClick={() => setIsMenuOpen((prev) => !prev)}
               aria-label="Profile options"
             >
-              <Ellipsis size={18} />
+              <Ellipsis size={16} />
             </button>
           </div>
 
@@ -404,43 +392,23 @@ const Dashboard = () => {
 
       {/* Chat Interface */}
       <section className="chatInterface">
-        {!isSidebarOpen && (
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="chatInterface__sidebarToggle"
-            title="Show sidebar"
-            aria-label="Show sidebar"
-          >
-            <PanelLeftOpen size={18} />
-          </button>
-        )}
-        {/* Top Header Bar
-        <header className="chatInterface__header">
-          <div className="chatInterface__headerLeft">
-            {!isSidebarOpen && (
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="chatInterface__sidebarToggle"
-                title="Show sidebar"
-              >
-                <PanelLeftOpen size={18} />
-              </button>
-            )}
-            <div className="chatInterface__modelSelector">
+        <header className="chatInterface__topbar">
+          <div className="chatInterface__topbarLeft">
+            <div className="chatInterface__productMark">
+              <span className="chatInterface__productMarkDot" />
               <span>Perplexity</span>
-              <span className="chatInterface__modelSelectorChevron">▼</span>
+              <ChevronDown size={13} />
             </div>
+            <span className="chatInterface__topbarDivider" />
+            <span className="chatInterface__chatTitle">{activeChatTitle}</span>
           </div>
-          <div className="chatInterface__headerRight">
-            <button className="chatInterface__headerButton">Share</button>
-            <button
-              className="chatInterface__headerButton"
-              onClick={() => setIsMenuOpen((prev) => !prev)}
-            >
-              Options
-            </button>
+          <div className="chatInterface__topbarRight">
+            <span className="chatInterface__modelBadge">
+              <Sparkles size={13} />
+              Gemini 3.6 Flash
+            </span>
           </div>
-        </header> */}
+        </header>
 
         <div className="chatInterface__content">
           <div className="chatInterface__messages">
@@ -534,16 +502,16 @@ const Dashboard = () => {
                 );
               })
               }
-              {showPendingRequest && (
+              {hasPendingRequest && (
                 <>
                   <div className="chatInterface__message chatInterface__message--user chatInterface__pendingMessage">
                     <div className="chatInterface__userBubble">
-                      {pendingRequest.content}
+                      {activePendingRequest.content}
                     </div>
                   </div>
                   <div className="chatInterface__message chatInterface__message--ai chatInterface__message--loading">
                     <div className="chatInterface__text">
-                      {pendingRequest.failed ? (
+                      {activePendingRequest.failed ? (
                         <div className="chatInterface__pendingError">
                           We couldn&apos;t get an answer. You can retry below.
                         </div>
@@ -559,29 +527,16 @@ const Dashboard = () => {
                   </div>
                 </>
               )}
+              <div ref={messagesEndRef} aria-hidden="true" />
               </>
             )}
-
-            {/* <div className="chatInterface__message chatInterface__message--ai chatInterface__message--loading">
-                <div className="chatInterface__text">
-                  <div
-                    className="chatInterface__loader"
-                    aria-label="Assistant is typing"
-                  >
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                </div>
-              </div>
-            </div> */}
           </div>
         </div>
 
         {/* Floating input bar at bottom, visible only when there are messages */}
         {hasMessages && (
           <div
-            className={`chatInterface__inputContainer ${showPendingRequest ? "chatInterface__inputContainer--moving" : ""}`}
+            className={`chatInterface__inputContainer ${hasPendingRequest ? "chatInterface__inputContainer--moving" : ""}`}
           >
             {renderInputForm(false)}
             <div className="chatInterface__disclaimer">

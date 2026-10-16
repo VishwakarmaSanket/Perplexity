@@ -3247,3 +3247,1122 @@
     transition: none;
   }
 }
+
+/* Product polish: quiet surfaces, precise type, and stronger hierarchy */
+
+.main-dashboard {
+  --dash-bg: #fbfbfc;
+  --dash-sidebar: #f6f7f9;
+  --dash-surface: #ffffff;
+  --dash-text: #17191c;
+  --dash-muted: #69717d;
+  --dash-border: #e5e7eb;
+  --dash-accent: #6d5dfc;
+  --dash-accent-hover: #5b4ce6;
+  background: var(--dash-bg);
+  font-family: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
+}
+
+.main-dashboard.theme-dark {
+  --dash-bg: #101112;
+  --dash-sidebar: #17191b;
+  --dash-surface: #1c1f22;
+  --dash-text: #f4f5f6;
+  --dash-muted: #9ba1a8;
+  --dash-border: #2b3035;
+  --dash-accent: #a99cff;
+  --dash-accent-hover: #b8afff;
+}
+
+.sidebar:not(.sidebar--collapsed) {
+  background: var(--dash-sidebar);
+  border-right-color: var(--dash-border);
+}
+
+.sidebar:not(.sidebar--collapsed) .sidebar__card:first-child {
+  background: #17191c;
+  border-color: #17191c;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 12%), 0 5px 14px rgb(16 24 40 / 5%);
+}
+
+.theme-dark .sidebar:not(.sidebar--collapsed) .sidebar__card:first-child {
+  background: #f3f4f6;
+  border-color: #f3f4f6;
+  color: #17191c;
+}
+
+.sidebar:not(.sidebar--collapsed) .sidebar__card:first-child .sidebar__cardIcon {
+  color: currentColor;
+}
+
+.sidebar:not(.sidebar--collapsed) .sidebar__searchInput {
+  background: rgb(127 137 148 / 8%);
+  border-color: transparent;
+}
+
+.sidebar:not(.sidebar--collapsed) .sidebar__searchInput:hover,
+.sidebar:not(.sidebar--collapsed) .sidebar__searchInput:focus {
+  background: var(--dash-surface);
+  border-color: var(--dash-border);
+}
+
+.sidebar:not(.sidebar--collapsed) .sidebar__item {
+  color: var(--dash-muted);
+}
+
+.sidebar:not(.sidebar--collapsed) .sidebar__item--active {
+  background: rgb(109 93 252 / 11%);
+  color: var(--dash-text);
+}
+
+.chatInterface__topbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 58px;
+  padding: 0 30px;
+  border-bottom: 1px solid var(--dash-border);
+  background: rgb(251 251 252 / 86%);
+  backdrop-filter: blur(16px);
+}
+
+.theme-dark .chatInterface__topbar {
+  background: rgb(16 17 18 / 86%);
+}
+
+.chatInterface__topbarLeft,
+.chatInterface__topbarRight,
+.chatInterface__productMark,
+.chatInterface__modelBadge {
+  display: flex;
+  align-items: center;
+}
+
+.chatInterface__topbarLeft {
+  min-width: 0;
+  gap: 12px;
+}
+
+.chatInterface__topbarRight {
+  flex-shrink: 0;
+}
+
+.chatInterface__topbarIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  background: var(--dash-surface);
+  color: var(--dash-muted);
+  cursor: pointer;
+}
+
+.chatInterface__topbarIcon:hover {
+  color: var(--dash-text);
+  border-color: var(--dash-muted);
+}
+
+.chatInterface__productMark {
+  gap: 8px;
+  color: var(--dash-text);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+.chatInterface__productMarkDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dash-accent);
+  box-shadow: 0 0 0 4px rgb(109 93 252 / 12%);
+}
+
+.chatInterface__topbarDivider {
+  width: 1px;
+  height: 18px;
+  background: var(--dash-border);
+}
+
+.chatInterface__chatTitle {
+  max-width: min(42vw, 420px);
+  overflow: hidden;
+  color: var(--dash-muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatInterface__modelBadge {
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-surface);
+  color: var(--dash-muted);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.chatInterface__modelBadge svg {
+  color: var(--dash-accent);
+}
+
+.chatInterface__messages {
+  padding: 42px 32px 48px;
+}
+
+.chatInterface__message {
+  max-width: 800px;
+  margin-bottom: 30px;
+}
+
+.chatInterface__text {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+.chatInterface__markdown {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+.chatInterface__emptyHeading {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3.3vw, 42px);
+  font-weight: 400;
+  letter-spacing: -1.4px;
+}
+
+.chatInterface__markdown p {
+  margin: 0 0 12px;
+}
+
+.chatInterface__markdown h1,
+.chatInterface__markdown h2,
+.chatInterface__markdown h3 {
+  margin-top: 22px;
+  margin-bottom: 10px;
+}
+
+.chatInterface__userBubble {
+  border-radius: 16px 16px 5px 16px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 8%);
+  line-height: 1.55;
+}
+
+.chatInterface__inputContainer {
+  padding: 14px 32px 18px;
+}
+
+.chatInterface__inputWrapper {
+  max-width: 820px;
+  min-height: 60px;
+  padding: 9px 10px;
+  border-color: var(--dash-border);
+  border-radius: 15px;
+  box-shadow: 0 8px 26px rgb(16 24 40 / 5%), 0 1px 2px rgb(16 24 40 / 4%);
+}
+
+.chatInterface__inputWrapper:focus-within {
+  border-color: var(--dash-accent);
+  box-shadow: 0 0 0 3px rgb(109 93 252 / 13%), 0 8px 26px rgb(16 24 40 / 5%);
+}
+
+.chatInterface__input {
+  font-family: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+}
+
+.chatInterface__sendButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgb(109 93 252 / 22%);
+}
+
+.chatInterface__disclaimer {
+  margin-top: 9px;
+  color: var(--dash-muted);
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .chatInterface__topbar {
+    padding: 0 16px;
+  }
+
+  .chatInterface__modelBadge {
+    display: none;
+  }
+
+  .chatInterface__messages {
+    padding: 28px 16px 32px;
+  }
+
+  .chatInterface__inputContainer {
+    padding: 10px 16px 14px;
+  }
+}
+
+/* Final product system: higher contrast surfaces and an intentional violet accent. */
+.main-dashboard {
+  --dash-bg: #f3f5f8;
+  --dash-sidebar: #e9edf3;
+  --dash-surface: #ffffff;
+  --dash-surface-subtle: #f8fafc;
+  --dash-text: #111827;
+  --dash-muted: #596579;
+  --dash-faint: #8b96a8;
+  --dash-border: #d8dee8;
+  --dash-border-strong: #bcc6d5;
+  --dash-accent: #4f46e5;
+  --dash-accent-hover: #4338ca;
+  --dash-accent-soft: #eaebff;
+  --dash-accent-ink: #3730a3;
+  --dash-accent-strong: #4338ca;
+  --dash-accent-contrast: #ffffff;
+  background: var(--dash-bg);
+  color: var(--dash-text);
+}
+
+.main-dashboard.theme-dark {
+  --dash-bg: #0b0f14;
+  --dash-sidebar: #10161f;
+  --dash-surface: #151c26;
+  --dash-surface-subtle: #111821;
+  --dash-text: #f8fafc;
+  --dash-muted: #aab6c7;
+  --dash-faint: #78859a;
+  --dash-border: #273345;
+  --dash-border-strong: #3a4960;
+  --dash-accent: #a78bfa;
+  --dash-accent-hover: #c4b5fd;
+  --dash-accent-soft: rgb(139 92 246 / 18%);
+  --dash-accent-ink: #ddd6fe;
+  --dash-accent-strong: #7c3aed;
+  --dash-accent-contrast: #ffffff;
+}
+
+.main-dashboard .sidebar {
+  background: var(--dash-sidebar);
+  border-right-color: var(--dash-border);
+}
+
+.main-dashboard .sidebar__top,
+.main-dashboard .sidebar__card,
+.main-dashboard .chatInterface__inputWrapper,
+.main-dashboard .chatInterface__promptCard,
+.main-dashboard .chatInterface__modelBadge,
+.main-dashboard .chatInterface__topbarIcon {
+  border-color: var(--dash-border);
+  background: var(--dash-surface);
+}
+
+.main-dashboard .sidebar__top {
+  box-shadow: 0 8px 24px rgb(15 23 42 / 6%);
+}
+
+.main-dashboard.theme-dark .sidebar__top,
+.main-dashboard.theme-dark .chatInterface__inputWrapper {
+  box-shadow: 0 12px 32px rgb(0 0 0 / 24%);
+}
+
+.main-dashboard .sidebar__card {
+  border-color: var(--dash-accent-strong);
+  background: var(--dash-accent-strong);
+  color: var(--dash-accent-contrast);
+  box-shadow: 0 8px 18px rgb(79 70 229 / 22%);
+}
+
+.main-dashboard .sidebar__card:hover {
+  border-color: var(--dash-accent-hover);
+  background: var(--dash-accent-hover);
+  color: var(--dash-accent-contrast);
+  box-shadow: 0 10px 24px rgb(79 70 229 / 30%);
+  transform: translateY(-1px);
+}
+
+.main-dashboard .sidebar__cardIcon {
+  background: rgb(255 255 255 / 18%);
+  color: currentColor;
+}
+
+.main-dashboard .sidebar__searchInput {
+  border-color: var(--dash-border);
+  background: var(--dash-surface-subtle);
+  color: var(--dash-text);
+}
+
+.main-dashboard .sidebar__searchInput:focus {
+  border-color: var(--dash-accent);
+  background: var(--dash-surface);
+  box-shadow: 0 0 0 3px rgb(79 70 229 / 16%);
+}
+
+.main-dashboard .sidebar__item {
+  color: var(--dash-muted);
+}
+
+.main-dashboard .sidebar__item:hover {
+  background: var(--dash-surface);
+  color: var(--dash-text);
+}
+
+.main-dashboard .sidebar__item--active {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+  box-shadow: inset 3px 0 0 var(--dash-accent);
+}
+
+.main-dashboard .sidebar__item--active:hover {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapsedRail button:hover,
+.main-dashboard .sidebar--collapsed .sidebar__collapsedRail button:focus-visible {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+}
+
+.main-dashboard .sidebar__themeButton:hover,
+.main-dashboard .sidebar__menuButton:hover,
+.main-dashboard .chatInterface__topbarIcon:hover {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-surface);
+  color: var(--dash-text);
+}
+
+.main-dashboard .chatInterface {
+  background:
+    radial-gradient(circle at 50% -20%, rgb(79 70 229 / 7%), transparent 38%),
+    var(--dash-bg);
+}
+
+.main-dashboard.theme-dark .chatInterface {
+  background:
+    radial-gradient(circle at 50% -20%, rgb(139 92 246 / 12%), transparent 38%),
+    var(--dash-bg);
+}
+
+.main-dashboard .chatInterface__topbar {
+  border-bottom-color: var(--dash-border);
+  background: rgb(255 255 255 / 88%);
+}
+
+.main-dashboard.theme-dark .chatInterface__topbar {
+  background: rgb(11 15 20 / 88%);
+}
+
+.main-dashboard .chatInterface__productMarkDot {
+  box-shadow: 0 0 0 4px rgb(79 70 229 / 18%);
+}
+
+.main-dashboard .chatInterface__modelBadge {
+  border-color: rgb(79 70 229 / 35%);
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+}
+
+.main-dashboard .chatInterface__modelBadge svg,
+.main-dashboard .chatInterface__promptIcon,
+.main-dashboard .chatInterface__markdown a {
+  color: var(--dash-accent);
+}
+
+.main-dashboard .chatInterface__emptyHeading {
+  color: var(--dash-text);
+}
+
+.main-dashboard .chatInterface__inputWrapper {
+  border-color: var(--dash-border-strong);
+  box-shadow: 0 16px 38px rgb(15 23 42 / 9%), 0 2px 4px rgb(15 23 42 / 5%);
+}
+
+.main-dashboard.theme-dark .chatInterface__inputWrapper {
+  border-color: var(--dash-border-strong);
+  box-shadow: 0 16px 38px rgb(0 0 0 / 30%), 0 2px 4px rgb(0 0 0 / 18%);
+}
+
+.main-dashboard .chatInterface__inputWrapper:focus-within {
+  border-color: var(--dash-accent);
+  box-shadow: 0 0 0 4px rgb(79 70 229 / 18%), 0 16px 38px rgb(15 23 42 / 10%);
+}
+
+.main-dashboard .chatInterface__attachButton:hover,
+.main-dashboard .chatInterface__imageModeButton:hover {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+}
+
+.main-dashboard .chatInterface__imageModeButton--active,
+.main-dashboard .chatInterface__toggleContainer--active {
+  border-color: rgb(79 70 229 / 48%);
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+}
+
+.main-dashboard .chatInterface__toggleContainer {
+  border-color: var(--dash-border);
+  background: var(--dash-surface-subtle);
+}
+
+.main-dashboard .chatInterface__toggleContainer--active .chatInterface__toggleSwitch {
+  background: var(--dash-accent-strong);
+}
+
+.main-dashboard .chatInterface__sendButton {
+  background: var(--dash-accent-strong);
+  color: var(--dash-accent-contrast);
+  box-shadow: 0 5px 12px rgb(79 70 229 / 32%);
+}
+
+.main-dashboard .chatInterface__sendButton:hover {
+  background: var(--dash-accent-hover);
+  box-shadow: 0 7px 16px rgb(79 70 229 / 40%);
+}
+
+.main-dashboard .chatInterface__promptCard:hover {
+  border-color: var(--dash-accent);
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+  transform: translateY(-1px);
+}
+
+.main-dashboard .chatInterface__userBubble {
+  border-color: transparent;
+  background: var(--dash-accent-strong);
+  color: var(--dash-accent-contrast);
+  box-shadow: 0 6px 16px rgb(79 70 229 / 18%);
+}
+
+.main-dashboard .chatInterface__thinking span:not(:first-child),
+.main-dashboard .chatInterface__loader span {
+  background: var(--dash-accent);
+}
+
+.main-dashboard .chatInterface__markdown blockquote {
+  border-left-color: var(--dash-accent);
+  background: var(--dash-accent-soft);
+  color: var(--dash-muted);
+}
+
+.main-dashboard .chatInterface__markdown th {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+}
+
+.main-dashboard button:focus-visible,
+.main-dashboard input:focus-visible,
+.main-dashboard textarea:focus-visible,
+.main-dashboard select:focus-visible,
+.main-dashboard [role="button"]:focus-visible {
+  outline: 2px solid var(--dash-accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgb(79 70 229 / 14%);
+}
+
+/* ProjectIQ design system alignment. This is the canonical application layer. */
+.main-dashboard {
+  --dash-bg: #fafaf8;
+  --dash-sidebar: #f5f5f2;
+  --dash-surface: #ffffff;
+  --dash-surface-subtle: #f5f5f2;
+  --dash-text: #171717;
+  --dash-muted: #525252;
+  --dash-faint: #737373;
+  --dash-border: #e5e5e2;
+  --dash-border-subtle: #eeeeeb;
+  --dash-border-strong: #d4d4d0;
+  --dash-accent: #2563eb;
+  --dash-accent-hover: #1d4ed8;
+  --dash-accent-soft: #eff6ff;
+  --dash-accent-ink: #1d4ed8;
+  --dash-accent-strong: #2563eb;
+  --dash-accent-contrast: #ffffff;
+  --sidebar-bg: var(--dash-sidebar);
+  --sidebar-hover: #eeeeeb;
+  --sidebar-active: var(--dash-accent-soft);
+  --sidebar-muted: var(--dash-faint);
+  background: var(--dash-bg);
+  color: var(--dash-text);
+  font-family: var(--font-sans);
+}
+
+.main-dashboard.theme-dark {
+  --dash-bg: #111110;
+  --dash-sidebar: #181817;
+  --dash-surface: #181817;
+  --dash-surface-subtle: #222220;
+  --dash-text: #f5f5f2;
+  --dash-muted: #b8b8b3;
+  --dash-faint: #85857f;
+  --dash-border: #30302d;
+  --dash-border-subtle: #262623;
+  --dash-border-strong: #454541;
+  --dash-accent: #60a5fa;
+  --dash-accent-hover: #93c5fd;
+  --dash-accent-soft: #172554;
+  --dash-accent-ink: #bfdbfe;
+  --dash-accent-strong: #60a5fa;
+  --dash-accent-contrast: #0f172a;
+  --sidebar-bg: var(--dash-sidebar);
+  --sidebar-hover: #222220;
+  --sidebar-active: var(--dash-accent-soft);
+  --sidebar-muted: var(--dash-faint);
+}
+
+.main-dashboard,
+.main-dashboard .chatInterface {
+  background-image: none;
+}
+
+.main-dashboard .sidebar {
+  flex-basis: 240px;
+  width: 240px;
+  background: var(--dash-sidebar);
+  border-right-color: var(--dash-border);
+}
+
+.main-dashboard .sidebar.sidebar--collapsed {
+  flex-basis: 64px;
+  width: 64px;
+  min-width: 64px;
+  padding-right: 8px;
+  padding-left: 8px;
+  border-right: 1px solid var(--dash-border);
+}
+
+.main-dashboard .sidebar__top {
+  min-height: 52px;
+  padding: 8px 10px;
+  border-color: var(--dash-border);
+  border-radius: 12px;
+  background: var(--dash-surface);
+  box-shadow: none;
+}
+
+.main-dashboard .sidebar__card,
+.main-dashboard .chatInterface__inputWrapper,
+.main-dashboard .chatInterface__promptCard,
+.main-dashboard .chatInterface__modelBadge,
+.main-dashboard .chatInterface__topbarIcon {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.main-dashboard .sidebar__card {
+  border-color: var(--dash-accent);
+  background: var(--dash-accent);
+  color: var(--dash-accent-contrast);
+  box-shadow: none;
+}
+
+.main-dashboard .sidebar__card:hover {
+  border-color: var(--dash-accent-hover);
+  background: var(--dash-accent-hover);
+  color: var(--dash-accent-contrast);
+  box-shadow: none;
+  transform: none;
+}
+
+.main-dashboard .sidebar__cardIcon {
+  background: rgb(255 255 255 / 16%);
+}
+
+.main-dashboard .sidebar__searchInput {
+  border-color: var(--dash-border-subtle);
+  border-radius: 8px;
+  background: var(--dash-surface);
+}
+
+.main-dashboard .sidebar__searchInput:focus {
+  border-color: var(--dash-accent);
+  box-shadow: none;
+}
+
+.main-dashboard .sidebar__item {
+  border-radius: 8px;
+  color: var(--dash-muted);
+}
+
+.main-dashboard .sidebar__item:hover {
+  background: var(--sidebar-hover);
+  color: var(--dash-text);
+}
+
+.main-dashboard .sidebar__item--active {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+  box-shadow: inset 2px 0 0 var(--dash-accent);
+}
+
+.main-dashboard .sidebar__item--active:hover {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapsedRail button:hover,
+.main-dashboard .sidebar--collapsed .sidebar__collapsedRail button:focus-visible {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+}
+
+.main-dashboard .chatInterface__topbar {
+  min-height: 64px;
+  border-bottom-color: var(--dash-border);
+  background: var(--dash-surface);
+  backdrop-filter: none;
+}
+
+.main-dashboard.theme-dark .chatInterface__topbar {
+  background: var(--dash-surface);
+}
+
+.main-dashboard .chatInterface__productMarkDot {
+  box-shadow: none;
+}
+
+.main-dashboard .chatInterface__modelBadge {
+  border-color: var(--dash-border);
+  background: var(--dash-surface-subtle);
+  color: var(--dash-muted);
+}
+
+.main-dashboard .chatInterface__modelBadge svg,
+.main-dashboard .chatInterface__promptIcon,
+.main-dashboard .chatInterface__markdown a {
+  color: var(--dash-accent);
+}
+
+.main-dashboard .chatInterface__emptyHeading {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.main-dashboard .chatInterface__text {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.main-dashboard .chatInterface__markdown {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.main-dashboard .chatInterface__markdown h1,
+.main-dashboard .chatInterface__markdown h2,
+.main-dashboard .chatInterface__markdown h3,
+.main-dashboard .chatInterface__markdown th {
+  font-family: var(--font-sans);
+}
+
+.main-dashboard .chatInterface__markdown :not(pre) > code,
+.main-dashboard .chatInterface__markdown pre,
+.main-dashboard .chatInterface__markdown table {
+  font-family: var(--font-mono);
+}
+
+.main-dashboard .chatInterface__inputWrapper {
+  min-height: 56px;
+  border-color: var(--dash-border-strong);
+  background: var(--dash-surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+}
+
+.main-dashboard .chatInterface__inputWrapper:focus-within {
+  border-color: var(--dash-accent);
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 18%);
+}
+
+.main-dashboard .chatInterface__input {
+  font-family: var(--font-sans);
+  font-size: 16px;
+}
+
+.main-dashboard .chatInterface__imageModeButton--active,
+.main-dashboard .chatInterface__toggleContainer--active {
+  border-color: var(--dash-accent);
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+}
+
+.main-dashboard .chatInterface__toggleContainer {
+  border-color: var(--dash-border);
+  border-radius: 8px;
+  background: var(--dash-surface-subtle);
+}
+
+.main-dashboard .chatInterface__toggleContainer--active .chatInterface__toggleSwitch {
+  background: var(--dash-accent);
+}
+
+.main-dashboard .chatInterface__sendButton {
+  border-radius: 8px;
+  background: var(--dash-accent);
+  color: var(--dash-accent-contrast);
+  box-shadow: none;
+}
+
+.main-dashboard .chatInterface__sendButton:hover {
+  background: var(--dash-accent-hover);
+  box-shadow: none;
+}
+
+.main-dashboard .chatInterface__promptCard:hover {
+  border-color: var(--dash-accent);
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent-ink);
+  transform: none;
+}
+
+.main-dashboard .chatInterface__userBubble {
+  border-radius: 12px;
+  background: var(--dash-accent);
+  color: var(--dash-accent-contrast);
+  box-shadow: none;
+}
+
+.main-dashboard .chatInterface__thinking span:not(:first-child),
+.main-dashboard .chatInterface__loader span {
+  background: var(--dash-accent);
+}
+
+.main-dashboard .chatInterface__markdown blockquote {
+  border-left-color: var(--dash-accent);
+  background: var(--dash-accent-soft);
+  color: var(--dash-muted);
+}
+
+.main-dashboard .chatInterface__markdown th {
+  background: var(--dash-surface-subtle);
+  color: var(--dash-text);
+}
+
+.main-dashboard button:focus-visible,
+.main-dashboard input:focus-visible,
+.main-dashboard textarea:focus-visible,
+.main-dashboard select:focus-visible,
+.main-dashboard [role="button"]:focus-visible {
+  outline: 2px solid var(--dash-accent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .main-dashboard .sidebar {
+    flex-basis: 240px;
+    width: 240px;
+  }
+
+  .main-dashboard .sidebar.sidebar--collapsed {
+    flex-basis: 64px;
+    width: 64px;
+    min-width: 64px;
+  }
+}
+
+/* Sidebar header stays self-contained in both expanded and collapsed modes. */
+.main-dashboard.theme-dark {
+  --dash-accent: #2563eb;
+  --dash-accent-hover: #1d4ed8;
+  --dash-accent-strong: #2563eb;
+  --dash-accent-contrast: #ffffff;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__top {
+  display: flex;
+  width: 48px;
+  min-height: 48px;
+  margin: 0 auto 16px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__appName {
+  display: none;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapseButton {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dash-muted);
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapseButton:hover {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapsedRail {
+  margin-top: 0;
+}
+
+/* Sidebar recreation: one compact header, one navigation rhythm, one footer. */
+.main-dashboard .sidebar {
+  flex: 0 0 240px;
+  width: 240px;
+  padding: 16px 12px 12px;
+  gap: 0;
+  background: var(--dash-sidebar);
+  border-right: 1px solid var(--dash-border);
+}
+
+.main-dashboard .sidebar__top {
+  display: flex;
+  flex: 0 0 56px;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  margin: 0 0 20px;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid var(--dash-border);
+  border-radius: 16px;
+  background: var(--dash-surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
+}
+
+.main-dashboard .sidebar__appName {
+  margin: 0;
+  color: var(--dash-text);
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.main-dashboard .sidebar__collapseButton {
+  width: 34px;
+  height: 34px;
+  margin-left: auto;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  background: var(--dash-surface-subtle);
+  color: var(--dash-muted);
+}
+
+.main-dashboard .sidebar__collapseButton:hover {
+  border-color: var(--dash-accent);
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+}
+
+.main-dashboard .sidebar__actions {
+  gap: 8px;
+}
+
+.main-dashboard .sidebar__card {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.main-dashboard .sidebar__cardIcon {
+  width: 22px;
+  height: 22px;
+}
+
+.main-dashboard .sidebar__searchInput {
+  height: 40px;
+  font-size: 13px;
+}
+
+.main-dashboard .sidebar__history {
+  margin-top: 24px;
+}
+
+.main-dashboard .sidebar__historyHeader {
+  margin-bottom: 8px;
+  padding: 0 10px;
+}
+
+.main-dashboard .sidebar__heading {
+  color: var(--dash-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.main-dashboard .sidebar__list {
+  gap: 2px;
+}
+
+.main-dashboard .sidebar__item {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.main-dashboard .sidebar__itemTitle {
+  font-size: 13px;
+}
+
+.main-dashboard .sidebar__themeToggle {
+  padding: 10px 0;
+  border-top: 1px solid var(--dash-border);
+}
+
+.main-dashboard .sidebar__themeButton {
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.main-dashboard .sidebar__profile {
+  padding-top: 10px;
+  border-top: 1px solid var(--dash-border);
+}
+
+.main-dashboard .sidebar__profileRow {
+  min-height: 38px;
+  padding: 0 2px;
+}
+
+.main-dashboard .sidebar__avatar {
+  width: 32px;
+  height: 32px;
+  background: var(--dash-surface);
+}
+
+.main-dashboard .sidebar__username {
+  font-size: 13px;
+}
+
+.main-dashboard .sidebar--collapsed {
+  flex-basis: 64px;
+  width: 64px;
+  min-width: 64px;
+  padding: 16px 8px 12px;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__top {
+  display: flex;
+  flex: 0 0 48px;
+  width: 48px;
+  min-height: 48px;
+  margin: 0 auto 20px;
+  padding: 4px;
+  border-radius: 14px;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapseButton {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapsedRail {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapsedRail button {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__profile {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 0;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__avatar {
+  width: 32px;
+  height: 32px;
+}
+
+/* Compact application scale. */
+.main-dashboard .sidebar__top {
+  min-height: 52px;
+  flex-basis: 52px;
+}
+
+.main-dashboard .sidebar__appName {
+  font-size: 16px;
+}
+
+.main-dashboard .sidebar__collapseButton {
+  width: 32px;
+  height: 32px;
+}
+
+.main-dashboard .sidebar__cardText,
+.main-dashboard .sidebar__searchInput,
+.main-dashboard .sidebar__itemTitle,
+.main-dashboard .sidebar__username {
+  font-size: 12px;
+}
+
+.main-dashboard .sidebar__heading {
+  font-size: 10px;
+}
+
+.main-dashboard .sidebar__collapsedRail button {
+  width: 36px;
+  height: 36px;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__top {
+  flex-basis: 44px;
+  width: 44px;
+  min-height: 44px;
+  margin-bottom: 16px;
+  padding: 3px;
+  border-radius: 12px;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapseButton {
+  width: 36px;
+  height: 36px;
+}
+
+.main-dashboard .sidebar--collapsed .sidebar__collapsedRail button {
+  width: 36px;
+  height: 36px;
+}
+
+.main-dashboard .chatInterface__text {
+  font-size: 15px;
+}
+
+.main-dashboard .chatInterface__markdown {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.main-dashboard .chatInterface__userBubble {
+  font-size: 14px;
+}
