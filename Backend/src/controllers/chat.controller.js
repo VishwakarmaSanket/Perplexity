@@ -24,6 +24,17 @@ export async function sendMessage(req, res) {
     let title = null,
       chat = null;
 
+    if (chatID) {
+      chat = await chatModel.findOne({
+        _id: chatID,
+        user: req.user.id,
+      });
+
+      if (!chat) {
+        return res.status(404).json({ error: "Chat not found" });
+      }
+    }
+
     // If chatID is provided, find the chat and update it with the new message
     // If chatID is not provided, create a new chat with the generated title and message
     if (!chatID) {
@@ -45,7 +56,9 @@ export async function sendMessage(req, res) {
     });
     console.log("✅ [sendMessage] User message created");
 
-    const messages = await messageModel.find({ chat: chatID || chat._id });
+    const messages = await messageModel
+      .find({ chat: chatID || chat._id })
+      .sort({ createdAt: 1 });
     console.log("✅ [sendMessage] Found", messages.length, "messages");
 
     console.log("🤖 [sendMessage] Calling generateResponse...");
@@ -163,7 +176,7 @@ export async function getMessages(req, res) {
     return res.status(404).json({ error: "Chat not found" });
   }
 
-  const messages = await messageModel.find({ chat: chatID });
+  const messages = await messageModel.find({ chat: chatID }).sort({ createdAt: 1 });
 
   res.status(200).json({
     message: "Messages retrieved successfully",

@@ -9,7 +9,10 @@ const apiBaseUrl = import.meta.env.VITE_API_URL
 const api = axios.create({
   baseURL: apiBaseUrl,
   withCredentials: true,
-  timeout: 60000,
+  // Model responses can legitimately take longer during provider load. Keep
+  // the in-page thinking state alive instead of aborting an otherwise valid
+  // request too early.
+  timeout: 120000,
 });
 
 if (import.meta.env.DEV) {

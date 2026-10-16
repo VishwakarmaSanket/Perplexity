@@ -8,7 +8,8 @@ import {
   generateImage,
 } from "../services/chat.api";
 import {
-  setChats,
+  mergeChats,
+  removeChat,
   setCurrentChatId,
   setIsLoading,
   setError,
@@ -22,6 +23,12 @@ export const useChat = () => {
   const dispatch = useDispatch();
   const chats = useSelector((state) => state.chat.chats);
   const currentChatId = useSelector((state) => state.chat.currentChatId);
+
+  const getErrorMessage = (error, fallback) =>
+    error.response?.data?.error ||
+    error.response?.data?.message ||
+    error.message ||
+    fallback;
 
   // const refreshChats = async () => {
   //   dispatch(setIsLoading(true));
@@ -65,6 +72,7 @@ export const useChat = () => {
   // this function will be called when the user sends a message, it will send the message to the server and update the chat state with the new message
   async function handleSendMessage(chatID, message, webSearch = false) {
     dispatch(setIsLoading(true));
+    dispatch(setError(null));
     try {
       const resolvedChatID = chatID && chats[chatID] ? chatID : null;
       const data = await sendMessage({ chatID: resolvedChatID, message, webSearch });
@@ -92,10 +100,18 @@ export const useChat = () => {
           }),
         );
       }
+      dispatch(setError(null));
       return true;
     } catch (err) {
       console.error("Error in handleSendMessage:", err);
-      dispatch(setError(err.message));
+      dispatch(
+        setError(
+          getErrorMessage(
+            err,
+            "We could not complete that request. Please try again.",
+          ),
+        ),
+      );
       return false;
     } finally {
       dispatch(setIsLoading(false));
@@ -105,6 +121,7 @@ export const useChat = () => {
   // this function will be called when the user wants to generate an image
   async function handleGenerateImage(chatID, prompt) {
     dispatch(setIsLoading(true));
+    dispatch(setError(null));
     try {
       const resolvedChatID = chatID && chats[chatID] ? chatID : null;
       const data = await generateImage({ chatID: resolvedChatID, prompt });
@@ -138,7 +155,14 @@ export const useChat = () => {
       return true;
     } catch (err) {
       console.error("Error in handleGenerateImage:", err);
-      dispatch(setError(err.message));
+      dispatch(
+        setError(
+          getErrorMessage(
+            err,
+            "We could not generate that image. Please try again.",
+          ),
+        ),
+      );
       return false;
     } finally {
       dispatch(setIsLoading(false));
@@ -159,7 +183,7 @@ export const useChat = () => {
         };
         return acc;
       }, {});
-      dispatch(setChats(chatsMap));
+      dispatch(mergeChats(chatsMap));
       if (currentChatId && !chatsMap[currentChatId]) {
         dispatch(setCurrentChatId(null));
       }
@@ -175,6 +199,7 @@ export const useChat = () => {
     dispatch(setIsLoading(true));
     try {
       await deleteChat(chatID);
+      dispatch(removeChat(chatID));
       await handleGetChats();
       if (currentChatId === chatID) {
         dispatch(setCurrentChatId(null));

@@ -12,7 +12,6 @@ import "../styles/dashboard.scss";
 import {
   ArrowUp,
   Ellipsis,
-  History,
   Paperclip,
   Plus,
   Search,
@@ -24,11 +23,8 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
-  Palette,
-  PenLine,
-  Compass,
 } from "lucide-react";
-import { setCurrentChatId } from "../chat.slice";
+import { setCurrentChatId, setError } from "../chat.slice";
 const LogoImage = "/assets/AI_Logo.png";
 const LogoImageLight = "/assets/AI_Logo_Light.png";
 
@@ -46,13 +42,13 @@ const Dashboard = () => {
   const [isImageMode, setIsImageMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [pendingRequest, setPendingRequest] = useState(null);
 
   const chatsMap = useSelector((state) => state.chat.chats);
   const chatsList = Object.values(chatsMap);
   const currentChatId = useSelector((state) => state.chat.currentChatId);
   const chatError = useSelector((state) => state.chat.error);
   const user = useSelector((state) => state.auth.user);
-  // const isLoading = useSelector((state) => state.chat.isLoading);
 
   // Initialize socket connection and load chats
   useEffect(() => {
@@ -62,7 +58,13 @@ const Dashboard = () => {
 
   // Whenever the currentChatId changes, load messages
   useEffect(() => {
-    if (currentChatId && chatsMap[currentChatId]) {
+    // A newly-created chat already has its messages in Redux. Only fetch when
+    // the user selects a chat whose messages have not been loaded yet.
+    if (
+      currentChatId &&
+      chatsMap[currentChatId] &&
+      chatsMap[currentChatId].messages.length === 0
+    ) {
       chat.loadMessages(currentChatId);
     }
   }, [currentChatId, chatsMap]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -72,6 +74,17 @@ const Dashboard = () => {
     const trimmedMessage = chatInput.trim();
     if (!trimmedMessage) return;
 
+    const requestId = `${Date.now()}-${Math.random()}`;
+    const requestChatId = currentChatId;
+    const wasImageRequest = isImageMode;
+    setPendingRequest({
+      id: requestId,
+      chatId: requestChatId,
+      content: trimmedMessage,
+      isImage: wasImageRequest,
+    });
+    setChatInput("");
+
     let request;
     if (isImageMode) {
       request = chat.handleGenerateImage(currentChatId, trimmedMessage);
@@ -80,65 +93,14 @@ const Dashboard = () => {
       request = chat.handleSendMessage(currentChatId, trimmedMessage, webSearch);
     }
 
-    // Keep failed/slow requests visible so the user can retry instead of losing the prompt.
     Promise.resolve(request).then((succeeded) => {
-      if (succeeded) setChatInput("");
-    });
-  };
-
-  // Handles inline formatting inside a single line
-  const renderInline = (text) => {
-    const parts = text.split(/(\*\*[^*]+\*\*)/g);
-    return parts.map((part, idx) => {
-      if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
-        const boldText = part.slice(2, -2);
-        return <strong key={idx}>{boldText}</strong>;
-      }
-      return <React.Fragment key={idx}>{part}</React.Fragment>;
-    });
-  };
-
-  // Handles structure of the whole message (line-by-line)
-  const renderMessageContent = (content) => {
-    if (typeof content !== "string") return content;
-    const lines = content.split("\n");
-    return lines.map((line, idx) => {
-      const trimmed = line.trimStart();
-      if (trimmed.startsWith("### ")) {
-        return (
-          <div key={idx} className="chatInterface__heading chatInterface__h3">
-            {renderInline(trimmed.slice(4))}
-          </div>
-        );
-      }
-      if (trimmed.startsWith("## ")) {
-        return (
-          <div key={idx} className="chatInterface__heading chatInterface__h2">
-            {renderInline(trimmed.slice(3))}
-          </div>
-        );
-      }
-      if (trimmed.startsWith("# ")) {
-        return (
-          <div key={idx} className="chatInterface__heading chatInterface__h1">
-            {renderInline(trimmed.slice(2))}
-          </div>
-        );
-      }
-      if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
-        const bulletText = trimmed.slice(2);
-        return (
-          <div key={idx} className="chatInterface__bullet">
-            {"\u2022 "}
-            {renderInline(bulletText)}
-          </div>
-        );
-      }
-      return (
-        <div key={idx} className="chatInterface__paragraph">
-          {renderInline(line)}
-        </div>
-      );
+      setPendingRequest((pending) => {
+        if (!pending || pending.id !== requestId) return pending;
+        if (!succeeded) {
+          setChatInput(trimmedMessage);
+        }
+        return succeeded ? null : { ...pending, failed: true };
+      });
     });
   };
 
@@ -173,10 +135,22 @@ const Dashboard = () => {
     chatItem.title?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const hasMessages =
-    currentChatId &&
-    chatsMap[currentChatId]?.messages &&
-    chatsMap[currentChatId].messages.length > 0;
+  const currentMessages = currentChatId
+    ? chatsMap[currentChatId]?.messages || []
+    : [];
+  const showPendingRequest =
+    pendingRequest && pendingRequest.chatId === currentChatId;
+  const hasMessages = currentMessages.length > 0 || Boolean(showPendingRequest);
+
+  const handleStartNewChat = () => {
+    dispatch(setCurrentChatId(null));
+    dispatch(setError(null));
+    setPendingRequest(null);
+    setChatInput("");
+    setIsImageMode(false);
+    setWebSearch(false);
+    setIsMenuOpen(false);
+  };
 
   // Reusable input form component
   const renderInputForm = (isCentered = false) => {
@@ -266,7 +240,7 @@ const Dashboard = () => {
         <div className="sidebar__actions">
           <button
             className="sidebar__card"
-            onClick={() => dispatch(setCurrentChatId(null))}
+            onClick={handleStartNewChat}
             title="Start a new chat"
           >
             <div className="sidebar__cardIcon">
@@ -364,10 +338,6 @@ const Dashboard = () => {
 
           {isMenuOpen && (
             <div className="sidebar__menu">
-              <button className="sidebar__menuItem">Edit Profile</button>
-              <button className="sidebar__menuItem">Settings</button>
-              <button className="sidebar__menuItem">Upgrade Plan</button>
-              <button className="sidebar__menuItem">Help</button>
               <button
                 className="sidebar__menuItem sidebar__menuItem--logout"
                 onClick={async () => {
@@ -385,6 +355,16 @@ const Dashboard = () => {
 
       {/* Chat Interface */}
       <section className="chatInterface">
+        {!isSidebarOpen && (
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="chatInterface__sidebarToggle"
+            title="Show sidebar"
+            aria-label="Show sidebar"
+          >
+            <PanelLeftOpen size={18} />
+          </button>
+        )}
         {/* Top Header Bar
         <header className="chatInterface__header">
           <div className="chatInterface__headerLeft">
@@ -466,7 +446,8 @@ const Dashboard = () => {
                 </div>
               </div>
             ) : (
-              chatsMap[currentChatId].messages.map((msg, index) => {
+              <>
+              {currentMessages.map((msg, index) => {
                 const msgId = msg.id || msg._id;
                 return (
                   <div
@@ -486,7 +467,7 @@ const Dashboard = () => {
                       </div>
                     ) : (
                       <div className="chatInterface__userBubble">
-                        {renderMessageContent(msg.content)}
+                        {msg.content}
                       </div>
                     )}
                     {msgId && (
@@ -503,10 +484,36 @@ const Dashboard = () => {
                   </div>
                 );
               })
+              }
+              {showPendingRequest && (
+                <>
+                  <div className="chatInterface__message chatInterface__message--user chatInterface__pendingMessage">
+                    <div className="chatInterface__userBubble">
+                      {pendingRequest.content}
+                    </div>
+                  </div>
+                  <div className="chatInterface__message chatInterface__message--ai chatInterface__message--loading">
+                    <div className="chatInterface__text">
+                      {pendingRequest.failed ? (
+                        <div className="chatInterface__pendingError">
+                          We couldn&apos;t get an answer. You can retry below.
+                        </div>
+                      ) : (
+                        <div className="chatInterface__thinking" aria-label="Assistant is thinking">
+                          <span>Thinking</span>
+                          <span />
+                          <span />
+                          <span />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+              </>
             )}
 
-            {/* {isLoading && (
-              <div className="chatInterface__message chatInterface__message--ai chatInterface__message--loading">
+            {/* <div className="chatInterface__message chatInterface__message--ai chatInterface__message--loading">
                 <div className="chatInterface__text">
                   <div
                     className="chatInterface__loader"
@@ -518,13 +525,15 @@ const Dashboard = () => {
                   </div>
                 </div>
               </div>
-            )} */}
+            </div> */}
           </div>
         </div>
 
         {/* Floating input bar at bottom, visible only when there are messages */}
         {hasMessages && (
-          <div className="chatInterface__inputContainer">
+          <div
+            className={`chatInterface__inputContainer ${showPendingRequest ? "chatInterface__inputContainer--moving" : ""}`}
+          >
             {renderInputForm(false)}
             <div className="chatInterface__disclaimer">
               Perplexity can make mistakes. Check important info.

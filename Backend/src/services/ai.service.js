@@ -12,53 +12,62 @@ if (!ai) {
   console.warn("⚠️ GEMINI_API_KEY is missing in your .env file! AI features will fail.");
 }
 
-const GEMINI_MODEL = "gemini-3.8-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+const GEMINI_MODELS = [
+  GEMINI_MODEL,
+  "gemini-3.8-flash",
+].filter((model, index, models) => models.indexOf(model) === index);
 const transientStatusCodes = new Set([429, 500, 502, 503, 504]);
 
-async function generateContentWithRetry(request, retries = 3) {
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    try {
-      return await ai.models.generateContent(request);
-    } catch (error) {
-      const shouldRetry = transientStatusCodes.has(error.status) && attempt < retries;
-      if (!shouldRetry) throw error;
+function getResponseText(response) {
+  const value = typeof response?.text === "function" ? response.text() : response?.text;
+  return typeof value === "string" ? value.trim() : "";
+}
 
-      const delay = 750 * 2 ** attempt;
-      console.warn(
-        `Gemini request failed with ${error.status}; retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, delay));
+function fallbackTitle(message) {
+  const words = String(message)
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 4);
+
+  return words.length ? words.join(" ") : "New chat";
+}
+
+async function generateContentWithRetry(request, retries = 3) {
+  let lastError;
+
+  for (const model of GEMINI_MODELS) {
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      try {
+        return await ai.models.generateContent({ ...request, model });
+      } catch (error) {
+        lastError = error;
+        const modelUnavailable = error.status === 400 || error.status === 404;
+        const shouldRetry = transientStatusCodes.has(error.status) && attempt < retries;
+
+        if (modelUnavailable || !shouldRetry) break;
+
+        const delay = 750 * 2 ** attempt;
+        console.warn(
+          `Gemini request failed with ${error.status}; retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
   }
+
+  throw lastError;
 }
 
 // Generate chat title
 export async function generateChatTitle(message) {
-  try {
-    if (!ai) {
-      throw new Error("Google GenAI client is not initialized.");
-    }
-
-    const response = await generateContentWithRetry({
-      model: GEMINI_MODEL,
-      contents: `Generate a title for this message: "${message}"`,
-      config: {
-        systemInstruction: `You are an AI assistant that generates concise, clear, and engaging titles for chat conversations.
-Given a user's message, create a short title (2–3 words only) that accurately captures the main topic or intent of the conversation.
-Do not include punctuation, emojis, or extra words.
-Return only the title and nothing else.`
-      }
-    });
-
-    console.log("Generated chat title:", response.text);
-    return response.text.trim();
-  } catch (err) {
-    console.error("Error generating chat title:", err);
-    if (transientStatusCodes.has(err.status)) {
-      return "New chat";
-    }
-    throw new Error(`Failed to generate chat title: ${err.message}`);
-  }
+  // Titles are deliberately local. They are only navigation labels, and
+  // making them a second provider request delays the first useful answer.
+  const title = fallbackTitle(message);
+  console.log("Generated chat title:", title);
+  return title;
 }
 
 // Generate response with optional web search (RAG)
@@ -113,7 +122,11 @@ RULES:
       }
     });
 
-    return response.text;
+    const result = getResponseText(response);
+    if (!result) {
+      throw new Error("The AI provider returned an empty response.");
+    }
+    return result;
   } catch (err) {
     console.error("Error in generateResponse:", err);
     throw new Error("Failed to generate response: " + err.message);

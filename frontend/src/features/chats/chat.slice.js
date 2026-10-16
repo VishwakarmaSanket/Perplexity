@@ -47,7 +47,6 @@ const chatSlice = createSlice({
       state.chats[chatID].lastUpdated = new Date().toISOString();
     },
     setChats(state, action) {
-      // Preserve any messages already loaded into state to avoid wiping them out during sidebar sync
       const incomingChats = action.payload;
       Object.keys(incomingChats).forEach((id) => {
         if (state.chats[id] && state.chats[id].messages && state.chats[id].messages.length > 0) {
@@ -55,6 +54,28 @@ const chatSlice = createSlice({
         }
       });
       state.chats = incomingChats;
+    },
+    mergeChats(state, action) {
+      const incomingChats = action.payload;
+
+      // The initial sidebar request can finish after a new-chat request. Keep
+      // any locally-created conversation that is not in that stale response.
+      Object.entries(state.chats).forEach(([id, localChat]) => {
+        if (!incomingChats[id] && localChat.messages?.length > 0) {
+          incomingChats[id] = localChat;
+        }
+      });
+
+      Object.keys(incomingChats).forEach((id) => {
+        if (state.chats[id]?.messages?.length > 0) {
+          incomingChats[id].messages = state.chats[id].messages;
+        }
+      });
+
+      state.chats = incomingChats;
+    },
+    removeChat(state, action) {
+      delete state.chats[action.payload];
     },
     setCurrentChatId(state, action) {
       state.currentChatId = action.payload;
@@ -75,6 +96,8 @@ const chatSlice = createSlice({
 
 export const {
   setChats,
+  mergeChats,
+  removeChat,
   setCurrentChatId,
   setIsLoading,
   setError,
