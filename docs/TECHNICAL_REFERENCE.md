@@ -653,3 +653,205 @@ LoremFlickr and Picsum provide photographs/placeholders; they do not guarantee t
 Express serves files from process.cwd()/public; the generator also writes under process.cwd()/public/images. The process working directory therefore matters. If started from an unexpected directory, image writes may not land in the directory being served.
 
 Gemini image failure is caught so fallbacks can be attempted. Errors from Picsum, filesystem operations, or the outer service are rethrown with the prefix "Gemini Image Generation failed:". The controller returns 500. If the prompt Message was saved before an image failure, it remains. If a file is written but subsequent Message insertion fails, it can be orphaned.
+
+
+## 8. Data models and relationships
+
+All three Mongoose schemas enable timestamps, which add createdAt and updatedAt. ObjectId refs express logical relationships; no SQL-style foreign keys or schema-declared cascade deletes exist.
+
+### 8.1 User
+
+**Source:** Backend/src/models/user.model.js  
+**Model/collection convention:** User / users.
+
+| Field | Type | Required | Constraints/default | Lifecycle |
+|---|---|---|---|---|
+| _id | ObjectId | Generated | Mongoose ID | Document identity |
+| username | String | Yes | trim; unique | Registration validator restricts 3–30 letters/digits/underscore |
+| email | String | Yes | trim; lowercase; unique | Registration validator checks email syntax |
+| password | String | Yes | minlength 6 | Hashes modified password before save |
+| verified | Boolean | No | default false | Set true outside production; false until verification in production |
+| createdAt | Date | Generated | timestamps | Creation time |
+| updatedAt | Date | Generated | timestamps | Updated on save |
+
+Model behavior:
+- Pre-save hook hashes a modified password with bcryptjs and 10 salt rounds.
+- comparePassword(candidatePassword) returns bcrypt.compare(candidatePassword, this.password).
+
+Indexes/constraints: username and email declare unique: true, asking Mongoose/MongoDB to establish unique indexes when index creation is enabled. Unique is not itself a Mongoose validator; duplicate-key error code 11000 is handled in registration.
+
+Usage: register, login, get-me, verify-email and Backend/seed.js.
+
+Representative document (hash abbreviated):
+
+```json
+{
+  "_id": "USER_OBJECT_ID",
+  "username": "sanket_dev",
+  "email": "sanket@example.com",
+  "password": "<bcrypt-hash>",
+  "verified": true,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+### 8.2 Chat
+
+**Source:** Backend/src/models/chat.model.js  
+**Model/collection convention:** Chat / chats.
+
+| Field | Type | Required | Constraints/default |
+|---|---|---|---|
+| _id | ObjectId | Generated | Mongoose ID |
+| user | ObjectId referencing User | Yes | Owner |
+| title | String | No | Default New Chat; trimmed |
+| createdAt | Date | Generated | Timestamps |
+| updatedAt | Date | Generated | Timestamps |
+
+No explicit title length, per-user pagination index, compound index, or title uniqueness constraint is defined in the schema.
+
+Lifecycle: sendMessage and generateImage create Chats when chatID is falsy. getChats reads by owner. getMessages and deletion handlers apply owner checks on the Chat query, with the important exceptions that text/image writes do not validate supplied chat ownership and deleteChat deletes messages even if the owner-scoped Chat deletion fails.
+
+Representative document:
+
+```json
+{
+  "_id": "CHAT_OBJECT_ID",
+  "user": "USER_OBJECT_ID",
+  "title": "React State Updates",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+### 8.3 Message
+
+**Source:** Backend/src/models/message.model.js  
+**Model/collection convention:** Message / messages.
+
+| Field | Type | Required | Constraints/default |
+|---|---|---|---|
+| _id | ObjectId | Generated | Mongoose ID |
+| chat | ObjectId referencing Chat | Yes | Conversation ID |
+| content | String | Yes | Plain text, AI answer text or Markdown image string |
+| role | String | Yes | Enum: user or ai |
+| parentMessage | ObjectId referencing Message | No | Default null; AI answer points to its prompt |
+| createdAt | Date | Generated | Timestamps |
+| updatedAt | Date | Generated | Timestamps |
+
+No explicit message compound index, content-size limit, uniqueness constraint, or schema-level cascade is defined. The application manually deletes children when a user message is deleted.
+
+Representative AI message:
+
+```json
+{
+  "_id": "AI_MESSAGE_OBJECT_ID",
+  "chat": "CHAT_OBJECT_ID",
+  "content": "Here is a concise explanation...",
+  "role": "ai",
+  "parentMessage": "USER_MESSAGE_OBJECT_ID",
+  "createdAt": "2026-01-01T00:00:01.000Z",
+  "updatedAt": "2026-01-01T00:00:01.000Z"
+}
+```
+
+### 8.4 Relationships
+
+```mermaid
+erDiagram
+    USER ||--o{ CHAT : owns
+    CHAT ||--o{ MESSAGE : contains
+    MESSAGE o|--o{ MESSAGE : "parentMessage links reply to prompt"
+```
+
+Intended relationship: one User owns many Chats; a Chat contains many Messages; an AI Message links to the corresponding user prompt through parentMessage. The relationship is used by deleteMessage, but no DB-level cascade or transaction enforces it.
+
+### 8.5 Ordering, indexes and transactions
+
+The controllers don't explicitly sort messages or chats and don't paginate results. The full message history is loaded for each response. No MongoDB session or transaction is used around multi-document create/delete flows. The only explicitly declared uniqueness constraints are on User username and email.
+
+## 9. Frontend state and UI flows
+
+### 9.1 Redux structure
+
+The store registers auth and chat slices.
+
+Auth state:
+```js
+{
+  user: null,
+  loading: true,
+  error: null
+}
+```
+
+Chat state:
+```js
+{
+  chats: {},
+  currentChatId: "read from Local Storage or null",
+  isLoading: false,
+  error: null
+}
+```
+
+The chats object is keyed by chat ID. Loaded messages are commonly normalized to objects with role, content and id. The only slice-level persistence is currentChatId in browser Local Storage; the full chat map and messages are not persisted there.
+
+### 9.2 Session restoration
+
+1. App invokes handleGetMe on mount.
+2. Axios requests GET /api/auth/get-me with credentials.
+3. On success, auth state stores the returned user.
+4. On HTTP 401, handleGetMe suppresses a user-facing error; other errors set auth.error.
+5. Its finally block sets loading false.
+6. Protected keeps the page in a loading state until then; without a user it navigates to /login.
+7. Login success stores user in Redux and navigates to /.
+8. Logout calls backend and clears Redux state and Local Storage selection in a finally block, even if the server call fails.
+
+### 9.3 Chat list and message loading
+
+Dashboard mount calls initializeSocketConnection and handleGetChats.
+
+1. handleGetChats retrieves the user's Chat documents.
+2. The hook maps each document to an object keyed by MongoDB _id, with id, title, an empty messages array and updatedAt as lastUpdated.
+3. setChats replaces the chat map while preserving any existing non-empty message arrays for matching IDs.
+4. If the persisted currentChatId no longer exists in the newly loaded map, the hook clears it.
+5. When a selected ID exists in chatsMap, an effect calls loadMessages.
+6. loadMessages retrieves all Messages and maps each document to role, content and id before updating Redux.
+
+Local Storage is origin-specific. A selected chat saved on localhost doesn't automatically apply to the deployed site.
+
+### 9.4 Sending a text or image request
+
+1. Dashboard prevents form submission and trims chatInput.
+2. Empty input returns without a request.
+3. If image mode is active, it calls handleGenerateImage; otherwise it calls handleSendMessage with the webSearch flag.
+4. The hook sets isLoading true.
+5. It uses a chat ID only when the ID exists in the current Redux chat map; an absent or unrecognized ID is sent as null to create a new chat.
+6. It awaits the respective Axios API wrapper.
+7. For a new conversation, it dispatches createNewChat with returned ID/title.
+8. It appends the user prompt and AI response to the in-memory Redux chat entry.
+9. It returns true on success or false on failure; the input draft is cleared only when the returned promise resolves to true.
+10. isLoading is reset in finally. Errors are logged and stored in chat.error.
+
+Image mode is set false immediately after starting the async action, not after generation completes. The form keeps failed/slow message text so the user can retry.
+
+### 9.5 Web search and image mode
+
+- Search toggles local webSearch state and sends it with POST /api/chats/message. It is hidden while image mode is active.
+- Image mode switches form behavior to POST /api/chats/generate-image.
+- Quick prompts prefill the input and may turn on image/search mode.
+- The paperclip is visible but has no click handler or file-input/upload behavior.
+- Image responses are Markdown image strings and rendered with ReactMarkdown; the frontend doesn't upload image files.
+
+### 9.6 Rendering and chat management
+
+AI messages use ReactMarkdown with remark-gfm. Code fences with a language class are rendered by react-syntax-highlighter, with a theme selected from light/dark state. User messages use a simple line-by-line renderer recognizing heading markers, basic bullet prefixes and bold markers; that function isn't a complete Markdown parser.
+
+Sidebar search filters already-loaded chats by title locally. Selecting a chat dispatches setCurrentChatId and triggers message loading. Delete-chat invokes the delete endpoint then reloads the chat list; delete-message invokes its endpoint and reloads that chat's messages.
+
+### 9.7 UI controls with no implemented action
+
+The profile menu renders Edit Profile, Settings, Upgrade Plan and Help buttons without handlers. The share/options/model-selector header section is commented out. The theme toggle and sidebar collapse are component-local state and reset on reload. Several imported icons in Dashboard are unused in the current file. The loading indicator inside the message list is commented out even though Redux isLoading is maintained.
+
