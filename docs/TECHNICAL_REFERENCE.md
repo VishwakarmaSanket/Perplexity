@@ -224,3 +224,261 @@ Frontend:
 
 Direct package version ranges are declared separately in Backend/package.json and frontend/package.json; lockfiles contain the resolved dependency trees.
 
+
+
+## 4. HTTP API reference
+
+### 4.1 Conventions and route inventory
+
+JSON and URL-encoded bodies are parsed in the Express app. Authenticated routes use `authUser`, which reads a cookie named `token`. There is no shared response-envelope contract: error bodies vary by controller, and default Express errors may not be JSON.
+
+| Method | Route | Authentication | Purpose |
+|---|---|---|---|
+| GET | `/` | Public | Fixed server-running response |
+| POST | `/api/auth/register` | Public | Create account |
+| POST | `/api/auth/login` | Public | Check password, issue JWT cookie |
+| GET | `/api/auth/get-me` | Cookie | Fetch current account |
+| GET | `/api/auth/verify-email?token=...` | Query token | Verify email and return HTML |
+| POST | `/api/auth/logout` | Public | Clear cookie |
+| POST | `/api/chats/message` | Cookie | Persist prompt and AI answer |
+| POST | `/api/chats/generate-image` | Cookie | Generate/fetch image and persist Markdown image response |
+| GET | `/api/chats` | Cookie | List current user's chats |
+| GET | `/api/chats/:chatID/messages` | Cookie | Read messages from an owned chat |
+| DELETE | `/api/chats/:chatID` | Cookie | Delete a chat and its messages |
+| DELETE | `/api/chats/:chatID/messages/:messageID` | Cookie | Delete a message and possibly its child AI response |
+
+`GET /public/*` is also served by Express static middleware and is not an application JSON endpoint.
+
+### 4.2 GET /
+
+**Source:** route in `Backend/src/app.js`.
+
+- Input: no route/query/body input.
+- Success: HTTP 200 with `{ "message": "Server is running" }`.
+- Errors and side effects: no application-specific failure handling; request logging is the only usual middleware side effect.
+
+### 4.3 POST /api/auth/register
+
+**Source chain:** `auth.route.js` → `registerValidator` → `validate` → `register()` → User model → optional `sendEmail()`.
+
+Request body:
+
+```json
+{
+  "username": "sanket_dev",
+  "email": "sanket@example.com",
+  "password": "example-password"
+}
+```
+
+| Field | Type | Required | Actual rules |
+|---|---|---|---|
+| username | String | Yes | Trimmed, 3–30 chars, letters/digits/underscore; schema requires, trims and declares unique |
+| email | String | Yes | Trimmed, valid email; schema requires, trims, lowercases and declares unique |
+| password | String | Yes | Non-empty, at least 6 chars; schema requires/minlength 6; pre-save hook hashes it |
+
+Success:
+- HTTP 201 outside production: `{ message, success: true, user: { id, username, email, verified: true } }`. Email is skipped.
+- HTTP 201 in production: `{ message: "Account created! Please verify your email to log in.", success: true, user: { id, username, email, verified: false } }` after mail delivery.
+
+Explicit errors:
+- 400 validation: `{ message: firstError.msg, success: false, errors: [...] }`.
+- 400 existing username/email: message says account already exists, `error: "User already exists"`.
+- 400 Mongo duplicate key: message names the duplicate field, `error: "Duplicate key"`.
+- 400 Mongoose validation: first schema message, `error: "Validation error"`.
+- 500 production email failure: controller deletes the new user and returns a rollback message; error may contain provider detail.
+- 500 other caught failure: generic registration message and error text.
+
+Execution:
+1. Express parses the body.
+2. Validator trims/checks username and email, checks the password, and returns 400 with the first message plus all validation errors when invalid.
+3. Controller queries for a matching username or email.
+4. Only `NODE_ENV === "production"` activates production verification.
+5. The controller creates a User. In non-production the account is auto-verified; in production it is unverified.
+6. The User model hashes a modified password with bcryptjs at 10 salt rounds.
+7. Non-production returns 201 without email.
+8. Production signs a verification JWT with user ID, builds a link from `PUBLIC_API_URL` or request origin, and calls Nodemailer.
+9. Mail failure triggers deletion of the created User; success returns 201.
+
+Side effects: User insert; production email attempt. Registration does not set the auth cookie. The email token has no explicit expiration configured in the signing call.
+
+### 4.4 POST /api/auth/login
+
+Body:
+
+```json
+{
+  "email": "sanket@example.com",
+  "password": "example-password"
+}
+```
+
+Email is required, trimmed and checked with `isEmail()`; password is required and non-empty.
+
+- HTTP 200: `{ message: "Login successful", success: true, user: { id, username, email, verified } }` and a `token` Set-Cookie header.
+- 400: validator envelope, account not found, wrong password, or unverified account.
+- 500: `{ message: "Login failed. Please try again.", success: false, error: ... }`.
+
+Execution:
+1. Validation middleware checks body.
+2. Controller finds User by email.
+3. `comparePassword()` runs `bcrypt.compare`; wrong password and unverified account are rejected.
+4. Controller signs `{ id, username }` with `JWT_SECRET`.
+5. Cookie is `httpOnly` with 7-day max age. For HTTPS, code sets `SameSite=None; Secure`; otherwise `SameSite=Lax`.
+6. Safe user summary is returned in JSON; JWT is not returned in the body.
+
+Important: the cookie is configured for seven days, but `jwt.sign()` does not set `expiresIn`. The JWT has no explicit expiry claim in this implementation.
+
+### 4.5 GET /api/auth/get-me
+
+Requires cookie `token`; no request body.
+
+- 200: `{ message: "User fetched successfully", success: true, user: <User document without password> }`.
+- 401: missing cookie returns `error: "No token provided"`; verification failure returns `error: "Invalid token"`.
+- 404: user no longer exists.
+- 500: profile lookup failure.
+
+Execution: `authUser` reads `req.cookies.token`, verifies it using `JWT_SECRET`, assigns decoded claims to `req.user`, then `getMe()` queries User by ID and excludes password.
+
+### 4.6 GET /api/auth/verify-email
+
+Input: query parameter `token` from the verification email.
+
+- Success: HTTP 200 HTML verification page.
+- 404: token decoded but the user record is missing.
+- 400: `{ message: "Invalid or expired token", success: false, error: "Invalid token" }` for exceptions inside the controller's try block.
+
+Flow: verify token, load User by decoded ID, set `verified = true`, save, then send HTML. Observations: the token has no explicit expiry; the success page hard-codes `http://localhost:5173/login`; the catch also maps database/save errors to the invalid-token response.
+
+### 4.7 POST /api/auth/logout
+
+Public route; body is not needed.
+
+- 200: `{ message: "Logout successful", success: true }`.
+- 500: logout failure envelope.
+
+It calls `res.clearCookie("token", { httpOnly: true, sameSite: "lax" })`. These clear attributes do not mirror login's HTTPS branch, which may use `SameSite=None; Secure`. Confirm deployed cookie deletion in browser.
+
+### 4.8 POST /api/chats/message
+
+Body:
+
+```json
+{
+  "message": "Explain how React state updates work.",
+  "chatID": "OPTIONAL_EXISTING_CHAT_ID",
+  "webSearch": false
+}
+```
+
+| Field | Type expected | Required | Actual validation |
+|---|---|---|---|
+| message | String | Yes | Controller only checks truthiness; no length/type schema |
+| chatID | ObjectId string | No | Missing/falsy creates a new chat; existing ID is not owner-checked |
+| webSearch | Boolean | No | Passed through; any truthy value activates search |
+
+- Success: HTTP 201 `{ title, chat, aiMessage }`. New chat returns title/document; existing-chat path returns null for both; aiMessage is the saved AI Message document.
+- 400: `{ error: "Message is required" }`.
+- 401: auth middleware.
+- 500: `{ error: error.message || "Failed to send message" }` for caught failures.
+
+Execution:
+1. Verify cookie and set `req.user`.
+2. Read message, chatID and webSearch; log a prompt prefix.
+3. Reject a falsy message.
+4. If chatID is absent, generate a title, create a Chat owned by `req.user.id`.
+5. Insert User Message with `parentMessage: null`.
+6. Query messages for the target chat; there is no explicit sort.
+7. Call `generateResponse(messages, webSearch)`.
+8. Insert AI Message with `parentMessage` set to the new user-message ID.
+9. Return title, chat and aiMessage.
+
+Persistence/failure details: chat and user prompt are stored before provider generation. Gemini failure leaves those writes in place; failure inserting the AI response can leave an unanswered user message. No transaction wraps this workflow. A supplied chatID is neither verified as existing nor checked against the logged-in owner before the message writes. This is a significant authorization/data-integrity risk in current code.
+
+### 4.9 POST /api/chats/generate-image
+
+Body:
+
+```json
+{
+  "prompt": "A blue glass city floating above the ocean",
+  "chatID": "OPTIONAL_EXISTING_CHAT_ID"
+}
+```
+
+- `prompt` is required only by a truthiness check.
+- `chatID` is optional; absent ID triggers title generation and new Chat creation.
+- Success: HTTP 201 `{ title, chat, aiMessage }`. AI message content is Markdown image syntax linking to an absolute URL.
+- 400: `{ error: "Prompt is required" }`.
+- 401: auth middleware.
+- 500: caught provider, filesystem or DB error.
+
+Execution:
+1. Verify token and check prompt.
+2. For a new chat, generate a title for the text “Generate image: prompt” and create the Chat.
+3. Insert the prompt as a User Message.
+4. Call `generateGrokImage(prompt)`. The name is misleading: the implementation uses Google GenAI and a Gemini image model.
+5. The image service writes to `process.cwd()/public/images` and returns a `/public/images/...` path.
+6. The controller builds an absolute URL from request protocol and host.
+7. Insert the AI Message with Markdown image syntax and the user's message ID as parent.
+8. Return HTTP 201.
+
+Side effects and failures: chat, messages and local image files can be partially created. Generation failure after prompt insertion leaves an unanswered prompt. Image-file writes before a later DB failure can leave orphaned files. Existing chat IDs are not owner-checked.
+
+### 4.10 GET /api/chats
+
+Requires auth cookie. No body or params.
+
+- 200: `{ message: "Chats retrieved successfully", chats: [ChatDocument, ...] }`.
+- 401: auth middleware.
+- 500: `{ error: "Failed to fetch chats" }`.
+
+Queries `Chat.find({ user: req.user.id })`. There is no explicit sort or pagination.
+
+### 4.11 GET /api/chats/:chatID/messages
+
+Requires auth cookie. `chatID` is the path parameter.
+
+- 200: `{ message: "Messages retrieved successfully", messages: [MessageDocument, ...] }`.
+- 401: auth middleware.
+- 404: `{ error: "Chat not found" }` for missing/unowned chat.
+- Invalid ObjectId/database errors are not caught locally and may use Express's default error handling.
+
+Flow: verify token, check Chat by ID and user ID, then query Messages by chat ID and return them without explicit sorting.
+
+### 4.12 DELETE /api/chats/:chatID
+
+Requires auth cookie.
+
+- 200: `{ message: "Chat deleted successfully" }`.
+- 404: `{ error: "Chat not found" }` if the owner-scoped Chat deletion finds nothing.
+- 401: auth middleware.
+- Other DB/cast errors propagate to default Express handling.
+
+Flow:
+1. Call `findOneAndDelete({ _id: chatID, user: req.user.id })`.
+2. Regardless of result, call `messageModel.deleteMany({ chat: chatID })`.
+3. Return 404 if no owned Chat was deleted; otherwise 200.
+
+**Critical authorization observation:** messages are deleted even when the Chat does not belong to the caller. A caller who supplies another user's chat ID can cause its messages to be deleted and receive 404. The two deletions are not transactional.
+
+### 4.13 DELETE /api/chats/:chatID/messages/:messageID
+
+Requires auth cookie.
+
+- 200: `{ message: "Message deleted successfully" }`.
+- 404: chat not found/unowned or message not found.
+- 401: auth middleware.
+- Other cast/DB errors propagate because the handler has no local try/catch.
+
+Flow:
+1. Verify Chat ownership with both chat ID and user ID.
+2. Delete the Message matching message ID and chat ID.
+3. If deleted message role is `user`, delete children with `parentMessage` equal to that user's message ID.
+4. Return 200.
+
+Deleting an AI message does not delete its user prompt. Prompt + child-response cleanup is not transactional.
+
+### 4.14 Static assets and unknown routes
+
+Static files are served from `path.join(process.cwd(), "public")` at URL prefix `/public`. Generated images are also written relative to `process.cwd()`; execution working directory therefore determines whether generated files land in the directory being served. Unknown application paths use Express's default 404 behavior; no catch-all JSON handler is registered.
