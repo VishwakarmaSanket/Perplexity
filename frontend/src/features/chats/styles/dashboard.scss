@@ -3163,3 +3163,87 @@
     transform: translateY(0);
   }
 }
+
+/* Collapsed sidebar rail */
+
+.main-dashboard .sidebar.sidebar--collapsed {
+  flex: 0 0 68px;
+  width: 68px;
+  min-width: 68px;
+  padding: 20px 9px 12px;
+  overflow: hidden;
+  border-right: 1px solid var(--dash-border);
+}
+
+.sidebar--collapsed .sidebar__top {
+  justify-content: center;
+  margin-bottom: 22px;
+}
+
+.sidebar--collapsed .sidebar__appName,
+.sidebar--collapsed .sidebar__collapseButton,
+.sidebar--collapsed .sidebar__actions,
+.sidebar--collapsed .sidebar__history,
+.sidebar--collapsed .sidebar__themeToggle,
+.sidebar--collapsed .sidebar__username,
+.sidebar--collapsed .sidebar__menuButton,
+.sidebar--collapsed .sidebar__menu {
+  display: none;
+}
+
+.sidebar__collapsedRail {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar__collapsedRail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 13px;
+}
+
+.sidebar--collapsed .sidebar__collapsedRail button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--dash-muted);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.sidebar--collapsed .sidebar__collapsedRail button:hover {
+  background: var(--sidebar-hover);
+  color: var(--dash-text);
+}
+
+.sidebar--collapsed .sidebar__profile {
+  margin-top: auto;
+  padding: 10px 0 0;
+  border-top: 0;
+}
+
+.sidebar--collapsed .sidebar__profileRow {
+  justify-content: center;
+}
+
+.sidebar--collapsed .sidebar__profileInfo {
+  flex: 0 0 auto;
+}
+
+.sidebar--collapsed .sidebar__avatar {
+  width: 34px;
+  height: 34px;
+  border-color: #101311;
+  background: #101311;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar--collapsed .sidebar__collapsedRail button {
+    transition: none;
+  }
+}

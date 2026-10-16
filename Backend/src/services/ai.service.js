@@ -101,7 +101,10 @@ export async function generateResponse(messages, webSearch = false) {
         }
       }
 
+      const currentDate = new Date().toISOString().slice(0, 10);
       systemInstruction = `You are a helpful and concise AI assistant with access to real-time search results.
+
+Today is ${currentDate}. For questions about recent events or a specific year, prioritize the supplied search results and use their publication dates when available.
 
 Here are the latest web search results relevant to the user's query:
 ${searchResultsStr}

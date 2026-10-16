@@ -23,6 +23,10 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  PenLine,
+  Pin,
+  MessageCircle,
+  Library,
 } from "lucide-react";
 import { setCurrentChatId, setError } from "../chat.slice";
 const LogoImage = "/assets/AI_Logo.png";
@@ -229,13 +233,58 @@ const Dashboard = () => {
           </div>
           <h1 className="sidebar__appName">Perplexity</h1>
           <button
-            onClick={() => setIsSidebarOpen(false)}
+            onClick={() => setIsSidebarOpen((previous) => !previous)}
             className="sidebar__collapseButton"
-            title="Hide sidebar"
+            title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
-            <PanelLeftClose size={18} />
+            {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
           </button>
         </div>
+
+        {!isSidebarOpen && (
+          <nav className="sidebar__collapsedRail" aria-label="Collapsed sidebar">
+            <button
+              type="button"
+              onClick={handleStartNewChat}
+              title="New chat"
+              aria-label="New chat"
+            >
+              <PenLine size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              title="Search chats"
+              aria-label="Search chats"
+            >
+              <Search size={21} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              title="Open chat history"
+              aria-label="Open chat history"
+            >
+              <Pin size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              title="Open conversations"
+              aria-label="Open conversations"
+            >
+              <MessageCircle size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              title="Open library"
+              aria-label="Open library"
+            >
+              <Library size={21} />
+            </button>
+          </nav>
+        )}
 
         <div className="sidebar__actions">
           <button
